@@ -196,8 +196,8 @@ def search_by_party():
     party = request.args.get('party')
     year = request.args.get('year', str(datetime.now().year))
 
-    if not all([state, dist, complex_code, est, party]):
-        return jsonify({'error': 'state, dist, complex, est, and party parameters required'}), 400
+    if not all([state, dist, complex_code, party]):
+        return jsonify({'error': 'state, dist, complex, and party parameters required'}), 400
 
     # Validate year
     try:
@@ -207,11 +207,14 @@ def search_by_party():
     except ValueError:
         return jsonify({'error': 'year must be an integer'}), 400
 
-    result = run_bharat_command([
+    cmd = [
         'bharat-courts', '--json', 'districtcourts', 'search-by-party',
-        '--state', state, '--dist', dist, '--complex', complex_code, '--est', est,
+        '--state', state, '--dist', dist, '--complex', complex_code,
         '--party', party, '--year', year
-    ])
+    ]
+    if est:
+        cmd.extend(['--est', est])
+    result = run_bharat_command(cmd)
 
     if 'error' in result:
         return jsonify(result), 500
