@@ -617,7 +617,7 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'http://localhost:5001';
+        const API_BASE_URL = 'http://localhost:5002';
 
         // ===== UTILITY FUNCTIONS =====
 
@@ -685,8 +685,8 @@
                 if (Array.isArray(data)) {
                     data.forEach(state => {
                         const option = document.createElement('option');
-                        option.value = state.state_code;
-                        option.textContent = state.state_name;
+                        option.value = state.code;
+                        option.textContent = state.name;
                         stateSelect.appendChild(option);
                     });
                 }
@@ -712,8 +712,8 @@
                 if (data.districts && Array.isArray(data.districts)) {
                     data.districts.forEach(district => {
                         const option = document.createElement('option');
-                        option.value = district.district_code;
-                        option.textContent = district.district_name;
+                        option.value = district.code;
+                        option.textContent = district.name;
                         districtSelect.appendChild(option);
                     });
                 }
@@ -738,8 +738,8 @@
                 if (data.complexes && Array.isArray(data.complexes)) {
                     data.complexes.forEach(complex => {
                         const option = document.createElement('option');
-                        option.value = complex.complex_code;
-                        option.textContent = complex.complex_name;
+                        option.value = complex.code;
+                        option.textContent = complex.name;
                         complexSelect.appendChild(option);
                     });
                 }
@@ -764,8 +764,8 @@
                 if (data.establishments && Array.isArray(data.establishments)) {
                     data.establishments.forEach(est => {
                         const option = document.createElement('option');
-                        option.value = est.establishment_code;
-                        option.textContent = est.establishment_name;
+                        option.value = est.code;
+                        option.textContent = est.name;
                         estSelect.appendChild(option);
                     });
                 }
@@ -790,8 +790,8 @@
                 if (data.courts && Array.isArray(data.courts)) {
                     data.courts.forEach(court => {
                         const option = document.createElement('option');
-                        option.value = court.court_no;
-                        option.textContent = court.court_name;
+                        option.value = court.code;
+                        option.textContent = court.name;
                         courtSelect.appendChild(option);
                     });
                 }

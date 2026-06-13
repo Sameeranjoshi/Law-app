@@ -34,6 +34,18 @@ def run_bharat_command(cmd_list):
     except Exception as e:
         return {'error': str(e)}
 
+def dict_to_options(d):
+    """
+    Convert bharat-courts response dict {code: name} to sorted array
+    of {code, name} objects for dropdown options.
+    """
+    if not isinstance(d, dict):
+        return d  # Already a list or other format — return as-is
+    return sorted(
+        [{'code': code, 'name': name} for code, name in d.items()],
+        key=lambda x: x['name']
+    )
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
@@ -52,19 +64,44 @@ def server_error(error):
 @app.route('/api/courts/states', methods=['GET'])
 def get_states():
     """Fetch all states"""
-    result = run_bharat_command(['bharat-courts', '--json', 'districtcourts', 'districts', '--state', '27'])
-    # This endpoint may not exist; fallback to hardcoded list of common states
-    states = [
-        {'state_code': 27, 'state_name': 'Maharashtra'},
-        {'state_code': 28, 'state_name': 'Manipur'},
-        {'state_code': 29, 'state_name': 'Meghalaya'},
-        {'state_code': 30, 'state_name': 'Mizoram'},
-        {'state_code': 31, 'state_name': 'Nagaland'},
-        {'state_code': 32, 'state_name': 'Odisha'},
-        {'state_code': 33, 'state_name': 'Punjab'},
-        {'state_code': 34, 'state_name': 'Rajasthan'},
-    ]
-    return jsonify(states)
+    # bharat-courts 'states' command uses display codes that DON'T match the codes
+    # required by 'districts'. This hardcoded list uses the codes that actually work
+    # with the districts/complexes/establishments queries (verified by probing).
+    states = {
+        "1": "Maharashtra",
+        "2": "Andhra Pradesh",
+        "3": "Karnataka",
+        "4": "Kerala",
+        "5": "Himachal Pradesh",
+        "6": "Assam",
+        "7": "Delhi",
+        "8": "Bihar",
+        "9": "Rajasthan",
+        "10": "Haryana",
+        "11": "Odisha",
+        "12": "Jammu and Kashmir",
+        "13": "Uttar Pradesh",
+        "14": "Jharkhand",
+        "15": "Uttarakhand",
+        "16": "West Bengal",
+        "17": "Gujarat",
+        "18": "Chhattisgarh",
+        "20": "Tripura",
+        "21": "Meghalaya",
+        "22": "Punjab",
+        "23": "Madhya Pradesh",
+        "24": "Sikkim",
+        "25": "Manipur",
+        "26": "Arunachal Pradesh",
+        "29": "Telangana",
+        "30": "Goa",
+        "31": "Puducherry",
+        "33": "Ladakh",
+        "34": "Mizoram",
+        "35": "Lakshadweep",
+        "36": "Nagaland",
+    }
+    return jsonify(dict_to_options(states))
 
 @app.route('/api/courts/districts', methods=['GET'])
 def get_districts():
@@ -75,7 +112,7 @@ def get_districts():
     result = run_bharat_command(['bharat-courts', '--json', 'districtcourts', 'districts', '--state', state])
     if 'error' in result:
         return jsonify(result), 500
-    return jsonify(result)
+    return jsonify(dict_to_options(result))
 
 @app.route('/api/courts/complexes', methods=['GET'])
 def get_complexes():
@@ -87,7 +124,7 @@ def get_complexes():
     result = run_bharat_command(['bharat-courts', '--json', 'districtcourts', 'complexes', '--state', state, '--dist', dist])
     if 'error' in result:
         return jsonify(result), 500
-    return jsonify(result)
+    return jsonify(dict_to_options(result))
 
 @app.route('/api/courts/establishments', methods=['GET'])
 def get_establishments():
@@ -100,7 +137,7 @@ def get_establishments():
     result = run_bharat_command(['bharat-courts', '--json', 'districtcourts', 'establishments', '--state', state, '--dist', dist, '--complex', complex_code])
     if 'error' in result:
         return jsonify(result), 500
-    return jsonify(result)
+    return jsonify(dict_to_options(result))
 
 @app.route('/api/courts/courts', methods=['GET'])
 def get_courts():
@@ -114,7 +151,7 @@ def get_courts():
     result = run_bharat_command(['bharat-courts', '--json', 'districtcourts', 'courts', '--state', state, '--dist', dist, '--complex', complex_code, '--est', est])
     if 'error' in result:
         return jsonify(result), 500
-    return jsonify(result)
+    return jsonify(dict_to_options(result))
 
 # ===== CAUSE LIST ENDPOINT =====
 
