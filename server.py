@@ -147,6 +147,40 @@ def get_causelist():
 
     return jsonify({'data': result, 'date': date_str, 'query': {'state': state, 'dist': dist, 'complex': complex_code, 'court_no': court_no}})
 
+# ===== SEARCH BY PARTY ENDPOINT =====
+
+@app.route('/api/search-party', methods=['GET'])
+def search_by_party():
+    """Search cases by party name and year"""
+    state = request.args.get('state')
+    dist = request.args.get('dist')
+    complex_code = request.args.get('complex')
+    est = request.args.get('est')
+    party = request.args.get('party')
+    year = request.args.get('year', str(datetime.now().year))
+
+    if not all([state, dist, complex_code, est, party]):
+        return jsonify({'error': 'state, dist, complex, est, and party parameters required'}), 400
+
+    # Validate year
+    try:
+        year_int = int(year)
+        if year_int < 1950 or year_int > datetime.now().year:
+            return jsonify({'error': 'year must be between 1950 and current year'}), 400
+    except ValueError:
+        return jsonify({'error': 'year must be an integer'}), 400
+
+    result = run_bharat_command([
+        'bharat-courts', '--json', 'districtcourts', 'search-by-party',
+        '--state', state, '--dist', dist, '--complex', complex_code, '--est', est,
+        '--party', party, '--year', year
+    ])
+
+    if 'error' in result:
+        return jsonify(result), 500
+
+    return jsonify({'data': result, 'query': {'party': party, 'year': year}})
+
 if __name__ == '__main__':
     print(f"\n▲ Bharat-Courts Backend running → http://localhost:{FLASK_PORT}\n")
     app.run(host='localhost', port=FLASK_PORT, debug=(FLASK_ENV == 'development'))
