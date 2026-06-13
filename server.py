@@ -209,7 +209,7 @@ def get_orders():
     # Return placeholder
     return jsonify({
         'error': 'Orders retrieval via bharat-courts not yet available',
-        'note': 'Orders must be retrieved through eCourtsIndia API (separate endpoint)',
+        'note': 'This endpoint is a placeholder for future bharat-courts orders integration',
         'cnr': cnr
     }), 501
 

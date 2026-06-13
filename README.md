@@ -15,9 +15,8 @@ A simple, tab-based web interface for querying Indian court data via bharat-cour
 # 1. Install dependencies
 pip install -r requirements.txt
 
-# 2. Configure your API key (optional, if using eCourtsIndia features)
+# 2. (Optional) Copy the example env file to customize port/environment
 cp .env.example .env
-# Edit .env and add your ECI_API_KEY if needed
 
 # 3. Start the backend
 python server.py
@@ -44,7 +43,7 @@ Find all cases involving a specific party (petitioner or respondent) for a given
 Get full details of a case by its Case Number Registration (CNR).
 
 ### Orders & Documents
-Retrieve orders and documents for a specific case (feature available with eCourtsIndia API).
+Retrieve orders and documents for a specific case (placeholder — future bharat-courts integration).
 
 ## Troubleshooting
 
