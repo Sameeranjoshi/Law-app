@@ -116,6 +116,37 @@ def get_courts():
         return jsonify(result), 500
     return jsonify(result)
 
+# ===== CAUSE LIST ENDPOINT =====
+
+@app.route('/api/causelist', methods=['GET'])
+def get_causelist():
+    """Fetch cause list for a court and date"""
+    state = request.args.get('state')
+    dist = request.args.get('dist')
+    complex_code = request.args.get('complex')
+    court_no = request.args.get('court_no')
+    date_str = request.args.get('date')  # Format: DD-MM-YYYY
+
+    if not all([state, dist, complex_code, court_no, date_str]):
+        return jsonify({'error': 'state, dist, complex, court_no, and date parameters required'}), 400
+
+    # Validate date format (basic check)
+    try:
+        datetime.strptime(date_str, '%d-%m-%Y')
+    except ValueError:
+        return jsonify({'error': 'date must be in DD-MM-YYYY format'}), 400
+
+    result = run_bharat_command([
+        'bharat-courts', '--json', 'districtcourts', 'cause-list',
+        '--state', state, '--dist', dist, '--complex', complex_code, '--court-no', court_no,
+        '--date', date_str
+    ])
+
+    if 'error' in result:
+        return jsonify(result), 500
+
+    return jsonify({'data': result, 'date': date_str, 'query': {'state': state, 'dist': dist, 'complex': complex_code, 'court_no': court_no}})
+
 if __name__ == '__main__':
     print(f"\n▲ Bharat-Courts Backend running → http://localhost:{FLASK_PORT}\n")
     app.run(host='localhost', port=FLASK_PORT, debug=(FLASK_ENV == 'development'))
