@@ -181,6 +181,38 @@ def search_by_party():
 
     return jsonify({'data': result, 'query': {'party': party, 'year': year}})
 
+# ===== CNR LOOKUP & ORDERS ENDPOINTS =====
+
+@app.route('/api/lookup-cnr', methods=['GET'])
+def lookup_cnr():
+    """Lookup a case by CNR"""
+    cnr = request.args.get('cnr')
+    if not cnr:
+        return jsonify({'error': 'cnr parameter required'}), 400
+
+    # bharat-courts may not have a direct CNR lookup; this might return empty or error
+    # Fallback: return a message that CNR lookup requires more context
+    return jsonify({
+        'error': 'Direct CNR lookup via bharat-courts not yet available',
+        'note': 'Use search-by-party or cause-list to find cases, then get CNR from results',
+        'cnr': cnr
+    }), 501
+
+@app.route('/api/orders', methods=['GET'])
+def get_orders():
+    """Fetch orders for a case by CNR"""
+    cnr = request.args.get('cnr')
+    if not cnr:
+        return jsonify({'error': 'cnr parameter required'}), 400
+
+    # This may not be directly available from bharat-courts CLI
+    # Return placeholder
+    return jsonify({
+        'error': 'Orders retrieval via bharat-courts not yet available',
+        'note': 'Orders must be retrieved through eCourtsIndia API (separate endpoint)',
+        'cnr': cnr
+    }), 501
+
 if __name__ == '__main__':
     print(f"\n▲ Bharat-Courts Backend running → http://localhost:{FLASK_PORT}\n")
     app.run(host='localhost', port=FLASK_PORT, debug=(FLASK_ENV == 'development'))
