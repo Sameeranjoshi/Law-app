@@ -346,7 +346,7 @@ async function fetchCauseList() {
   if (!s) return;
   const date = document.getElementById('cause-date').value;
   const civil = document.getElementById('cause-civil').value;
-  showMsg('cause-msg', 'Loading cause list...', 'loading');
+  showMsg('cause-msg', 'Loading cause list... (may take 15-30s, solving CAPTCHA)', 'loading');
   document.getElementById('cause-results').innerHTML = '';
   try {
     const url = '/api/cause-list?dist=' + encodeURIComponent(s.dist)
@@ -379,7 +379,7 @@ async function searchParty() {
   if (!party) { showMsg('party-msg', 'Please enter a party name.', 'error'); return; }
   const year = document.getElementById('party-year').value;
   const status = document.getElementById('party-status').value;
-  showMsg('party-msg', 'Searching...', 'loading');
+  showMsg('party-msg', 'Searching... (may take 15-30s, solving CAPTCHA)', 'loading');
   document.getElementById('party-results').innerHTML = '';
   try {
     const url = '/api/search-party?dist=' + encodeURIComponent(s.dist)
@@ -431,7 +431,7 @@ async function lookupCase() {
   const cn = document.getElementById('case-number').value.trim();
   const cy = document.getElementById('case-year').value;
   if (!ct || !cn || !cy) { showMsg('case-msg', 'Please fill all fields.', 'error'); return; }
-  showMsg('case-msg', 'Looking up case...', 'loading');
+  showMsg('case-msg', 'Looking up case... (may take 15-30s, solving CAPTCHA)', 'loading');
   document.getElementById('case-results').innerHTML = '';
   try {
     const url = '/api/case?dist=' + encodeURIComponent(s.dist)
@@ -459,7 +459,7 @@ async function scanAdvocate() {
   if (!name) { showMsg('adv-msg', 'Please enter an advocate name.', 'error'); return; }
   const date = document.getElementById('adv-date').value;
   const civil = document.getElementById('adv-civil').value;
-  showMsg('adv-msg', 'Scanning cause lists for advocate...', 'loading');
+  showMsg('adv-msg', 'Scanning cause lists for advocate... (may take 30-60s)', 'loading');
   document.getElementById('adv-results').innerHTML = '';
   try {
     const url = '/api/scan-advocate?dist=' + encodeURIComponent(s.dist)
@@ -491,7 +491,7 @@ async function fetchOrders() {
   const cn = document.getElementById('orders-number').value.trim();
   const cy = document.getElementById('orders-year').value;
   if (!ct || !cn || !cy) { showMsg('orders-msg', 'Please fill all fields.', 'error'); return; }
-  showMsg('orders-msg', 'Fetching orders...', 'loading');
+  showMsg('orders-msg', 'Fetching orders... (may take 15-30s, solving CAPTCHA)', 'loading');
   document.getElementById('orders-results').innerHTML = '';
   try {
     const url = '/api/orders?dist=' + encodeURIComponent(s.dist)

@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import time
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_file
@@ -13,12 +14,22 @@ load_dotenv()
 app = Flask(__name__)
 PORT = int(os.getenv("FLASK_PORT", 5002))
 STATE = "1"  # Maharashtra
+MAX_RETRIES = 3
 
 
 # ── helpers ──────────────────────────────────────────────────────────
 
 def _run(coro):
-    return asyncio.run(coro)
+    """Run async coro with retries — eCourts drops connections under load."""
+    for attempt in range(MAX_RETRIES):
+        try:
+            return asyncio.run(coro())
+        except Exception as e:
+            if "disconnect" in str(e).lower() or "reset" in str(e).lower():
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(2 * (attempt + 1))
+                    continue
+            raise
 
 
 def _ok(data, **extra):
@@ -72,7 +83,7 @@ def districts():
         async with DistrictCourtClient() as c:
             return await c.list_districts(STATE)
     try:
-        d = _run(_go())
+        d = _run(_go)
         items = [{"code": k, "name": v} for k, v in sorted(d.items(), key=lambda x: x[1])]
         return _ok(items)
     except Exception as e:
@@ -88,7 +99,7 @@ def complexes():
         async with DistrictCourtClient() as c:
             return await c.list_complexes(STATE, p["dist"])
     try:
-        d = _run(_go())
+        d = _run(_go)
         items = [{"code": k, "name": v} for k, v in sorted(d.items(), key=lambda x: x[1])]
         return _ok(items)
     except Exception as e:
@@ -105,7 +116,7 @@ def case_types():
         async with DistrictCourtClient() as c:
             return await c.list_case_types(STATE, p["dist"], code, "")
     try:
-        d = _run(_go())
+        d = _run(_go)
         items = [{"code": k, "name": v} for k, v in sorted(d.items(), key=lambda x: x[1])]
         return _ok(items)
     except Exception as e:
@@ -149,7 +160,7 @@ def cause_list():
                     continue
             return all_entries, court_nos
     try:
-        entries, court_nos = _run(_go())
+        entries, court_nos = _run(_go)
         return _ok(entries, court_nos_scanned=court_nos, date=date_str or "today")
     except Exception as e:
         return _err(str(e), 500)
@@ -173,7 +184,7 @@ def search_party():
             )
             return [_case_to_dict(cs) for cs in cases]
     try:
-        return _ok(_run(_go()))
+        return _ok(_run(_go))
     except Exception as e:
         return _err(str(e), 500)
 
@@ -195,7 +206,7 @@ def case_lookup():
             )
             return [_case_to_dict(cs) for cs in cases]
     try:
-        return _ok(_run(_go()))
+        return _ok(_run(_go))
     except Exception as e:
         return _err(str(e), 500)
 
@@ -242,7 +253,7 @@ def scan_advocate():
                         })
             return matches, court_nos
     try:
-        matches, court_nos = _run(_go())
+        matches, court_nos = _run(_go)
         return _ok(matches, court_nos_scanned=court_nos, date=date_str or "today")
     except Exception as e:
         return _err(str(e), 500)
@@ -270,7 +281,7 @@ def orders():
                 "pdf_url": o.pdf_url,
             } for o in ords]
     try:
-        return _ok(_run(_go()))
+        return _ok(_run(_go))
     except Exception as e:
         return _err(str(e), 500)
 
