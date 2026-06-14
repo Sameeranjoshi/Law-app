@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maharashtra Courts</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f5f5; color: #222; }
+.container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+h1 { font-size: 1.6rem; margin-bottom: 2px; }
+.subtitle { color: #666; font-size: 0.9rem; margin-bottom: 18px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 2px solid #ccc; margin-bottom: 16px; }
+.tabs button { padding: 8px 16px; border: none; background: #e8e8e8; cursor: pointer; font-size: 0.85rem; border-radius: 4px 4px 0 0; transition: background .15s; }
+.tabs button:hover { background: #d0d0d0; }
+.tabs button.active { background: #2a5db0; color: #fff; }
+.panel { display: none; }
+.panel.active { display: block; }
+label { display: block; font-weight: 600; margin: 10px 0 4px; font-size: 0.85rem; }
+select, input[type="text"], input[type="number"], input[type="date"] {
+  width: 100%; padding: 7px 10px; border: 1px solid #bbb; border-radius: 4px; font-size: 0.9rem; margin-bottom: 6px;
+}
+button.action { padding: 8px 20px; background: #2a5db0; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; margin-top: 8px; }
+button.action:hover { background: #1e4a8f; }
+button.action:disabled { background: #999; cursor: not-allowed; }
+.msg { padding: 10px 14px; border-radius: 4px; margin: 10px 0; font-size: 0.88rem; }
+.msg.error { background: #fdecea; color: #b71c1c; }
+.msg.success { background: #e8f5e9; color: #1b5e20; }
+.msg.loading { background: #eceff1; color: #555; }
+table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.82rem; }
+th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+th { background: #2a5db0; color: #fff; font-weight: 600; }
+tr:nth-child(even) { background: #f0f4fa; }
+.detail-card { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 16px; margin-top: 12px; }
+.detail-card .row { display: flex; padding: 5px 0; border-bottom: 1px solid #eee; }
+.detail-card .row:last-child { border-bottom: none; }
+.detail-card .lbl { font-weight: 600; width: 180px; flex-shrink: 0; font-size: 0.85rem; color: #555; }
+.detail-card .val { font-size: 0.88rem; }
+.form-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.form-row > div { flex: 1; min-width: 180px; }
+.saved-info { background: #e3f2fd; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; margin-bottom: 10px; }
+a { color: #2a5db0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Maharashtra Courts</h1>
+  <p class="subtitle">District court queries via bharat-courts</p>
+
+  <div class="tabs">
+    <button class="active" onclick="switchTab('court')">Select Court</button>
+    <button onclick="switchTab('cause')">Cause List</button>
+    <button onclick="switchTab('party')">Search by Party</button>
+    <button onclick="switchTab('case')">Case Lookup</button>
+    <button onclick="switchTab('advocate')">Advocate Scan</button>
+    <button onclick="switchTab('orders')">Orders</button>
+  </div>
+
+  <!-- Tab 1: Select Court -->
+  <div id="tab-court" class="panel active">
+    <div id="court-saved"></div>
+    <label for="sel-dist">District</label>
+    <select id="sel-dist" onchange="loadComplexes()"><option value="">-- loading districts --</option></select>
+    <label for="sel-complex">Court Complex</label>
+    <select id="sel-complex"><option value="">-- select district first --</option></select>
+    <button class="action" onclick="saveDefault()">Save as Default</button>
+    <div id="court-msg"></div>
+  </div>
+
+  <!-- Tab 2: Cause List -->
+  <div id="tab-cause" class="panel">
+    <div id="cause-court"></div>
+    <div class="form-row">
+      <div>
+        <label for="cause-date">Date</label>
+        <input type="date" id="cause-date">
+      </div>
+      <div>
+        <label for="cause-civil">Type</label>
+        <select id="cause-civil">
+          <option value="true">Civil</option>
+          <option value="false">Criminal</option>
+        </select>
+      </div>
+    </div>
+    <button class="action" onclick="fetchCauseList()">Fetch</button>
+    <div id="cause-msg"></div>
+    <div id="cause-results"></div>
+  </div>
+
+  <!-- Tab 3: Search by Party -->
+  <div id="tab-party" class="panel">
+    <div id="party-court"></div>
+    <label for="party-name">Party Name</label>
+    <input type="text" id="party-name" placeholder="Enter party name">
+    <div class="form-row">
+      <div>
+        <label for="party-year">Year</label>
+        <input type="number" id="party-year" value="2025">
+      </div>
+      <div>
+        <label for="party-status">Status</label>
+        <select id="party-status">
+          <option value="Both">Both</option>
+          <option value="Pending">Pending</option>
+          <option value="Disposed">Disposed</option>
+        </select>
+      </div>
+    </div>
+    <button class="action" onclick="searchParty()">Search</button>
+    <div id="party-msg"></div>
+    <div id="party-results"></div>
+  </div>
+
+  <!-- Tab 4: Case Lookup -->
+  <div id="tab-case" class="panel">
+    <div id="case-court"></div>
+    <label for="case-type">Case Type</label>
+    <select id="case-type"><option value="">-- loading --</option></select>
+    <div class="form-row">
+      <div>
+        <label for="case-number">Case Number</label>
+        <input type="text" id="case-number" placeholder="e.g. 123">
+      </div>
+      <div>
+        <label for="case-year">Year</label>
+        <input type="number" id="case-year" value="2025">
+      </div>
+    </div>
+    <button class="action" onclick="lookupCase()">Lookup</button>
+    <div id="case-msg"></div>
+    <div id="case-results"></div>
+  </div>
+
+  <!-- Tab 5: Advocate Scan -->
+  <div id="tab-advocate" class="panel">
+    <div id="adv-court"></div>
+    <label for="adv-name">Advocate Name</label>
+    <input type="text" id="adv-name" value="Joshi">
+    <div class="form-row">
+      <div>
+        <label for="adv-date">Date</label>
+        <input type="date" id="adv-date">
+      </div>
+      <div>
+        <label for="adv-civil">Type</label>
+        <select id="adv-civil">
+          <option value="true">Civil</option>
+          <option value="false">Criminal</option>
+        </select>
+      </div>
+    </div>
+    <button class="action" onclick="scanAdvocate()">Scan</button>
+    <div id="adv-msg"></div>
+    <div id="adv-results"></div>
+  </div>
+
+  <!-- Tab 6: Orders -->
+  <div id="tab-orders" class="panel">
+    <div id="orders-court"></div>
+    <label for="orders-type">Case Type</label>
+    <select id="orders-type"><option value="">-- loading --</option></select>
+    <div class="form-row">
+      <div>
+        <label for="orders-number">Case Number</label>
+        <input type="text" id="orders-number" placeholder="e.g. 123">
+      </div>
+      <div>
+        <label for="orders-year">Year</label>
+        <input type="number" id="orders-year" value="2025">
+      </div>
+    </div>
+    <button class="action" onclick="fetchOrders()">Fetch Orders</button>
+    <div id="orders-msg"></div>
+    <div id="orders-results"></div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+let districtsLoaded = false;
+let caseTypesLoaded = { 'case-type': false, 'orders-type': false };
+
+// ── Utility ────────────────────────────────────────────────────────
+function getSaved() {
+  try { const v = localStorage.getItem('court'); return v ? JSON.parse(v) : null; }
+  catch { return null; }
+}
+
+function showMsg(elId, text, type) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.className = 'msg ' + (type || '');
+  el.textContent = text;
+  el.style.display = text ? 'block' : 'none';
+}
+
+function toDD(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  return d + '-' + m + '-' + y;
+}
+
+function renderTable(elId, rows, columns) {
+  const el = document.getElementById(elId);
+  if (!rows || rows.length === 0) {
+    el.innerHTML = '<p class="msg loading">No results.</p>';
+    return;
+  }
+  let html = '<table><tr>';
+  columns.forEach(c => html += '<th>' + esc(c.label) + '</th>');
+  html += '</tr>';
+  rows.forEach(r => {
+    html += '<tr>';
+    columns.forEach(c => {
+      let val = r[c.key] != null ? r[c.key] : '';
+      if (c.render) val = c.render(val, r);
+      else val = esc(String(val));
+      html += '<td>' + val + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+function renderCard(elId, obj) {
+  const el = document.getElementById(elId);
+  if (!obj) { el.innerHTML = '<p class="msg loading">No data.</p>'; return; }
+  let html = '<div class="detail-card">';
+  for (const [k, v] of Object.entries(obj)) {
+    if (v == null || v === '') continue;
+    const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    html += '<div class="row"><span class="lbl">' + esc(label) + '</span><span class="val">' + esc(String(v)) + '</span></div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function courtCheck(msgId) {
+  const s = getSaved();
+  if (!s) {
+    showMsg(msgId, 'Please select a court in the first tab.', 'error');
+    return null;
+  }
+  const infoEl = document.getElementById(msgId.replace('-msg', '-court'));
+  if (infoEl) infoEl.innerHTML = '<div class="saved-info">Court: ' + esc(s.dist_name) + ' → ' + esc(s.complex_name) + '</div>';
+  return s;
+}
+
+// ── Tab switching ──────────────────────────────────────────────────
+function switchTab(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  const tabNames = ['court','cause','party','case','advocate','orders'];
+  const idx = tabNames.indexOf(id);
+  if (idx >= 0) document.querySelectorAll('.tabs button')[idx].classList.add('active');
+
+  if (id === 'court' && !districtsLoaded) loadDistricts();
+  if (id === 'case' && !caseTypesLoaded['case-type']) loadCaseTypes('case-type');
+  if (id === 'orders' && !caseTypesLoaded['orders-type']) loadCaseTypes('orders-type');
+}
+
+// ── Tab 1: Select Court ────────────────────────────────────────────
+async function loadDistricts() {
+  const sel = document.getElementById('sel-dist');
+  sel.innerHTML = '<option value="">-- loading... --</option>';
+  try {
+    const r = await fetch('/api/districts');
+    const j = await r.json();
+    if (j.error) { showMsg('court-msg', j.error, 'error'); return; }
+    sel.innerHTML = '<option value="">-- select district --</option>';
+    j.data.forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.code; o.textContent = d.name;
+      sel.appendChild(o);
+    });
+    districtsLoaded = true;
+    const saved = getSaved();
+    if (saved) {
+      sel.value = saved.dist;
+      if (sel.value === saved.dist) await loadComplexes();
+    }
+  } catch (e) { showMsg('court-msg', 'Failed to load districts: ' + e.message, 'error'); }
+}
+
+async function loadComplexes() {
+  const distSel = document.getElementById('sel-dist');
+  const compSel = document.getElementById('sel-complex');
+  const dist = distSel.value;
+  if (!dist) { compSel.innerHTML = '<option value="">-- select district first --</option>'; return; }
+  compSel.innerHTML = '<option value="">-- loading... --</option>';
+  try {
+    const r = await fetch('/api/complexes?dist=' + encodeURIComponent(dist));
+    const j = await r.json();
+    if (j.error) { showMsg('court-msg', j.error, 'error'); return; }
+    compSel.innerHTML = '<option value="">-- select complex --</option>';
+    j.data.forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.code; o.textContent = d.name;
+      compSel.appendChild(o);
+    });
+    const saved = getSaved();
+    if (saved && saved.dist === dist) compSel.value = saved.complex;
+  } catch (e) { showMsg('court-msg', 'Failed to load complexes: ' + e.message, 'error'); }
+}
+
+function saveDefault() {
+  const dist = document.getElementById('sel-dist');
+  const comp = document.getElementById('sel-complex');
+  if (!dist.value || !comp.value) {
+    showMsg('court-msg', 'Please select both district and complex.', 'error');
+    return;
+  }
+  const data = {
+    dist: dist.value,
+    complex: comp.value,
+    dist_name: dist.options[dist.selectedIndex].text,
+    complex_name: comp.options[comp.selectedIndex].text
+  };
+  localStorage.setItem('court', JSON.stringify(data));
+  showMsg('court-msg', 'Saved: ' + data.dist_name + ' → ' + data.complex_name, 'success');
+  showSavedInfo();
+}
+
+function showSavedInfo() {
+  const saved = getSaved();
+  const el = document.getElementById('court-saved');
+  if (saved) {
+    el.innerHTML = '<div class="saved-info">Saved: ' + esc(saved.dist_name) + ' → ' + esc(saved.complex_name) + '</div>';
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+// ── Tab 2: Cause List ──────────────────────────────────────────────
+async function fetchCauseList() {
+  const s = courtCheck('cause-msg');
+  if (!s) return;
+  const date = document.getElementById('cause-date').value;
+  const civil = document.getElementById('cause-civil').value;
+  showMsg('cause-msg', 'Loading cause list...', 'loading');
+  document.getElementById('cause-results').innerHTML = '';
+  try {
+    const url = '/api/cause-list?dist=' + encodeURIComponent(s.dist)
+      + '&complex=' + encodeURIComponent(s.complex)
+      + '&date=' + encodeURIComponent(toDD(date))
+      + '&civil=' + civil;
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { showMsg('cause-msg', j.error, 'error'); return; }
+    showMsg('cause-msg', 'Found ' + j.count + ' entries.', 'success');
+    renderTable('cause-results', j.data, [
+      {key:'item_number', label:'Item #'},
+      {key:'case_number', label:'Case Number'},
+      {key:'case_type', label:'Case Type'},
+      {key:'petitioner', label:'Petitioner'},
+      {key:'respondent', label:'Respondent'},
+      {key:'advocate_petitioner', label:'Pet. Advocate'},
+      {key:'advocate_respondent', label:'Resp. Advocate'},
+      {key:'court_number', label:'Court #'},
+      {key:'judge', label:'Judge'},
+    ]);
+  } catch (e) { showMsg('cause-msg', 'Error: ' + e.message, 'error'); }
+}
+
+// ── Tab 3: Search by Party ─────────────────────────────────────────
+async function searchParty() {
+  const s = courtCheck('party-msg');
+  if (!s) return;
+  const party = document.getElementById('party-name').value.trim();
+  if (!party) { showMsg('party-msg', 'Please enter a party name.', 'error'); return; }
+  const year = document.getElementById('party-year').value;
+  const status = document.getElementById('party-status').value;
+  showMsg('party-msg', 'Searching...', 'loading');
+  document.getElementById('party-results').innerHTML = '';
+  try {
+    const url = '/api/search-party?dist=' + encodeURIComponent(s.dist)
+      + '&complex=' + encodeURIComponent(s.complex)
+      + '&party=' + encodeURIComponent(party)
+      + '&year=' + encodeURIComponent(year)
+      + '&status=' + encodeURIComponent(status);
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { showMsg('party-msg', j.error, 'error'); return; }
+    showMsg('party-msg', 'Found ' + j.count + ' cases.', 'success');
+    renderTable('party-results', j.data, [
+      {key:'case_number', label:'Case Number'},
+      {key:'cnr_number', label:'CNR'},
+      {key:'petitioner', label:'Petitioner'},
+      {key:'respondent', label:'Respondent'},
+      {key:'status', label:'Status'},
+      {key:'next_hearing_date', label:'Next Hearing'},
+    ]);
+  } catch (e) { showMsg('party-msg', 'Error: ' + e.message, 'error'); }
+}
+
+// ── Tab 4: Case Lookup ─────────────────────────────────────────────
+async function loadCaseTypes(selectId) {
+  const s = getSaved();
+  if (!s) return;
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = '<option value="">-- loading... --</option>';
+  try {
+    const url = '/api/case-types?dist=' + encodeURIComponent(s.dist)
+      + '&complex=' + encodeURIComponent(s.complex);
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) return;
+    sel.innerHTML = '<option value="">-- select case type --</option>';
+    j.data.forEach(d => {
+      const o = document.createElement('option');
+      o.value = d.code; o.textContent = d.name;
+      sel.appendChild(o);
+    });
+    caseTypesLoaded[selectId] = true;
+  } catch (e) { /* silent */ }
+}
+
+async function lookupCase() {
+  const s = courtCheck('case-msg');
+  if (!s) return;
+  const ct = document.getElementById('case-type').value;
+  const cn = document.getElementById('case-number').value.trim();
+  const cy = document.getElementById('case-year').value;
+  if (!ct || !cn || !cy) { showMsg('case-msg', 'Please fill all fields.', 'error'); return; }
+  showMsg('case-msg', 'Looking up case...', 'loading');
+  document.getElementById('case-results').innerHTML = '';
+  try {
+    const url = '/api/case?dist=' + encodeURIComponent(s.dist)
+      + '&complex=' + encodeURIComponent(s.complex)
+      + '&case_type=' + encodeURIComponent(ct)
+      + '&case_number=' + encodeURIComponent(cn)
+      + '&year=' + encodeURIComponent(cy);
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { showMsg('case-msg', j.error, 'error'); return; }
+    if (!j.data || j.data.length === 0) {
+      showMsg('case-msg', 'No case found.', 'loading');
+      return;
+    }
+    showMsg('case-msg', 'Case found.', 'success');
+    renderCard('case-results', j.data[0]);
+  } catch (e) { showMsg('case-msg', 'Error: ' + e.message, 'error'); }
+}
+
+// ── Tab 5: Advocate Scan ───────────────────────────────────────────
+async function scanAdvocate() {
+  const s = courtCheck('adv-msg');
+  if (!s) return;
+  const name = document.getElementById('adv-name').value.trim();
+  if (!name) { showMsg('adv-msg', 'Please enter an advocate name.', 'error'); return; }
+  const date = document.getElementById('adv-date').value;
+  const civil = document.getElementById('adv-civil').value;
+  showMsg('adv-msg', 'Scanning cause lists for advocate...', 'loading');
+  document.getElementById('adv-results').innerHTML = '';
+  try {
+    const url = '/api/scan-advocate?dist=' + encodeURIComponent(s.dist)
+      + '&complex=' + encodeURIComponent(s.complex)
+      + '&advocate=' + encodeURIComponent(name)
+      + '&date=' + encodeURIComponent(toDD(date))
+      + '&civil=' + civil;
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { showMsg('adv-msg', j.error, 'error'); return; }
+    showMsg('adv-msg', 'Found ' + j.count + ' matches.', 'success');
+    renderTable('adv-results', j.data, [
+      {key:'case_number', label:'Case Number'},
+      {key:'petitioner', label:'Petitioner vs Respondent', render: (v,r) => esc(r.petitioner||'') + ' vs ' + esc(r.respondent||'')},
+      {key:'advocate_role', label:'Role'},
+      {key:'advocate_petitioner', label:'Pet. Advocate'},
+      {key:'advocate_respondent', label:'Resp. Advocate'},
+      {key:'court_number', label:'Court #'},
+      {key:'item_number', label:'Item #'},
+    ]);
+  } catch (e) { showMsg('adv-msg', 'Error: ' + e.message, 'error'); }
+}
+
+// ── Tab 6: Orders ──────────────────────────────────────────────────
+async function fetchOrders() {
+  const s = courtCheck('orders-msg');
+  if (!s) return;
+  const ct = document.getElementById('orders-type').value;
+  const cn = document.getElementById('orders-number').value.trim();
+  const cy = document.getElementById('orders-year').value;
+  if (!ct || !cn || !cy) { showMsg('orders-msg', 'Please fill all fields.', 'error'); return; }
+  showMsg('orders-msg', 'Fetching orders...', 'loading');
+  document.getElementById('orders-results').innerHTML = '';
+  try {
+    const url = '/api/orders?dist=' + encodeURIComponent(s.dist)
+      + '&complex=' + encodeURIComponent(s.complex)
+      + '&case_type=' + encodeURIComponent(ct)
+      + '&case_number=' + encodeURIComponent(cn)
+      + '&year=' + encodeURIComponent(cy);
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { showMsg('orders-msg', j.error, 'error'); return; }
+    showMsg('orders-msg', 'Found ' + j.count + ' orders.', 'success');
+    renderTable('orders-results', j.data, [
+      {key:'order_date', label:'Order Date'},
+      {key:'order_type', label:'Order Type'},
+      {key:'judge', label:'Judge'},
+      {key:'pdf_url', label:'PDF', render: (v) => v ? '<a href="' + esc(v) + '" target="_blank">Download</a>' : ''},
+    ]);
+  } catch (e) { showMsg('orders-msg', 'Error: ' + e.message, 'error'); }
+}
+
+// ── Init ───────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  showSavedInfo();
+  loadDistricts();
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('cause-date').value = today;
+  document.getElementById('adv-date').value = today;
+});
+</script>
+</body>
+</html>
