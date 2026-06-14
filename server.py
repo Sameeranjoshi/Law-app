@@ -333,7 +333,12 @@ def scan_advocate():
     date_str = request.args.get("date", "")
     civil_arg = request.args.get("civil", "both").lower()
     code, _, _ = parse_complex_value(p["complex"])
-    needle = p["advocate"].lower()
+
+    # Normalize the needle: lowercase, strip all whitespace and periods so
+    # "Joshi J.A." matches "Joshi J. A." matches "joshi j a"
+    def norm(s):
+        return re.sub(r"[\s.]+", "", (s or "").lower())
+    needle = norm(p["advocate"])
 
     # Decide which lists to scan
     if civil_arg == "true" or civil_arg == "civil":
@@ -363,7 +368,7 @@ def scan_advocate():
                     for e in entries:
                         ap = (e.advocate_petitioner or "")
                         ar = (e.advocate_respondent or "")
-                        if needle in ap.lower() or needle in ar.lower():
+                        if needle in norm(ap) or needle in norm(ar):
                             matches.append({
                                 "case_number": (e.case_number or "").replace("View", "").split("Next")[0].strip(),
                                 "petitioner": e.petitioner.split("versus")[0].strip() if e.petitioner else "",
@@ -372,7 +377,7 @@ def scan_advocate():
                                                      if e.petitioner and "versus" in e.petitioner else "")),
                                 "advocate_petitioner": ap,
                                 "advocate_respondent": ar,
-                                "advocate_role": "petitioner" if needle in ap.lower() else "respondent",
+                                "advocate_role": "petitioner" if needle in norm(ap) else "respondent",
                                 "court_no": court_no,
                                 "court_name": court_name,
                                 "list_type": tag,
