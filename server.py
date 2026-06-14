@@ -4,7 +4,9 @@ from dotenv import load_dotenv
 import os
 import json
 import subprocess
+import asyncio
 from datetime import datetime
+from bharat_courts import DistrictCourtClient
 
 load_dotenv()
 
@@ -252,6 +254,114 @@ def get_orders():
         'note': 'This endpoint is a placeholder for future bharat-courts orders integration',
         'cnr': cnr
     }), 501
+
+# ===== ADVOCATE SCAN ENDPOINT =====
+
+import re
+
+async def _discover_court_nos(client, state, dist, complex_code, date_str, civil):
+    """
+    Probe the fillCauseList endpoint with an invalid court_no to extract the
+    list of available court_no codes for this complex from the error message.
+    """
+    try:
+        await client.cause_list(
+            state_code=state, dist_code=dist,
+            court_complex_code=complex_code, est_code="",
+            court_no="__probe__", causelist_date=date_str, civil=civil,
+        )
+        return []
+    except Exception as ex:
+        m = re.search(r"Available:\s*(\[[^\]]+\])", str(ex))
+        if not m:
+            return []
+        raw = m.group(1)
+        items = re.findall(r"'([^']+)'", raw)
+        return items
+
+async def _scan_advocate(state, dist, complex_code, advocate, civil, max_court, date_str=""):
+    """
+    Discover available court_nos for the complex, pull each cause list, and
+    filter entries where either advocate field contains the search term.
+    """
+    matches = []
+    needle = advocate.lower()
+    scanned = []
+    async with DistrictCourtClient() as client:
+        available = await _discover_court_nos(client, state, dist, complex_code, date_str, civil)
+        # Skip placeholders like 'D' (district summary) — only real court codes
+        real_codes = [c for c in available if c != 'D'][:max_court]
+
+        for court_no in real_codes:
+            scanned.append(court_no)
+            try:
+                entries = await client.cause_list(
+                    state_code=state,
+                    dist_code=dist,
+                    court_complex_code=complex_code,
+                    est_code="",
+                    court_no=court_no,
+                    causelist_date=date_str,
+                    civil=civil,
+                )
+            except Exception:
+                continue
+            for e in entries:
+                ap = (e.advocate_petitioner or "").lower()
+                ar = (e.advocate_respondent or "").lower()
+                if needle in ap or needle in ar:
+                    role = "petitioner" if needle in ap else "respondent"
+                    matches.append({
+                        "case_number": e.case_number,
+                        "case_type": e.case_type,
+                        "petitioner": e.petitioner,
+                        "respondent": e.respondent,
+                        "advocate_petitioner": e.advocate_petitioner,
+                        "advocate_respondent": e.advocate_respondent,
+                        "advocate_role": role,
+                        "court_number": e.court_number,
+                        "judge": e.judge,
+                        "listing_date": e.listing_date,
+                        "item_number": e.item_number,
+                        "found_in_court_no": court_no,
+                    })
+    return matches, scanned, available
+
+
+@app.route('/api/scan-advocate', methods=['GET'])
+def scan_advocate():
+    """Scan cause lists for an advocate name across court numbers in a complex."""
+    state = request.args.get('state')
+    dist = request.args.get('dist')
+    complex_code = request.args.get('complex')
+    advocate = request.args.get('advocate')
+
+    if not all([state, dist, complex_code, advocate]):
+        return jsonify({'error': 'state, dist, complex, and advocate parameters required'}), 400
+
+    civil = request.args.get('civil', 'true').lower() != 'false'
+    max_court = int(request.args.get('max_court', '20'))
+    date_str = request.args.get('date', '')  # DD-MM-YYYY, empty = today
+
+    try:
+        matches, scanned, available = asyncio.run(
+            _scan_advocate(state, dist, complex_code, advocate, civil, max_court, date_str)
+        )
+        return jsonify({
+            'data': matches,
+            'query': {
+                'advocate': advocate,
+                'civil': civil,
+                'date': date_str or 'today',
+                'court_nos_tried': scanned,
+                'court_nos_available': available,
+                'complex': complex_code,
+            },
+            'count': len(matches),
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     print(f"\n▲ Bharat-Courts Backend running → http://localhost:{FLASK_PORT}\n")

@@ -390,6 +390,7 @@
             <button class="tab-button" onclick="switchTab('search-party')">Search by Party</button>
             <button class="tab-button" onclick="switchTab('lookup-cnr')">Lookup by CNR</button>
             <button class="tab-button" onclick="switchTab('orders-documents')">Orders & Documents</button>
+            <button class="tab-button" onclick="switchTab('advocate-scan')">Advocate Scan</button>
             <button class="tab-button" onclick="switchTab('saved-cases')">Saved Cases</button>
         </div>
 
@@ -603,7 +604,50 @@
             <div id="orders-results" class="results-section"></div>
         </div>
 
-        <!-- TAB 6: Saved Cases -->
+        <!-- TAB 6: Advocate Scan -->
+        <div id="advocate-scan" class="tab-content">
+            <h2>Advocate Scan</h2>
+            <p style="color: #666; margin-bottom: 20px;">
+                Scan today's cause list for cases where a given advocate appears.
+                Uses the default court saved in <strong>Court Selection</strong>.
+            </p>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="advocate-name">Advocate Name (or surname)</label>
+                    <input type="text" id="advocate-name" placeholder="e.g., Joshi" value="Joshi">
+                </div>
+
+                <div class="form-group">
+                    <label for="advocate-civil">List Type</label>
+                    <select id="advocate-civil">
+                        <option value="true" selected>Civil</option>
+                        <option value="false">Criminal</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="advocate-date">Date (leave empty for today)</label>
+                    <input type="date" id="advocate-date">
+                    <small style="color:#888">Courts closed weekends — pick a weekday.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="advocate-max-court">Max Court Number to Scan</label>
+                    <input type="number" id="advocate-max-court" value="6" min="1" max="20">
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn-primary" onclick="scanAdvocate()">Scan Cause List</button>
+                </div>
+
+                <div id="advocate-message"></div>
+            </div>
+
+            <div id="advocate-results" class="results-section"></div>
+        </div>
+
+        <!-- TAB 7: Saved Cases -->
         <div id="saved-cases" class="tab-content">
             <h2>Saved Cases</h2>
             <p style="color: #666; margin-bottom: 20px;">Your saved cases are displayed below.</p>
@@ -1091,6 +1135,120 @@
                 console.error('Error fetching orders:', error);
                 showMessage('orders-message', `Error: ${error.message}`, 'error');
             }
+        }
+
+        // ===== ADVOCATE SCAN TAB HANDLER =====
+
+        async function scanAdvocate() {
+            const advocate = document.getElementById('advocate-name').value.trim();
+            const civil = document.getElementById('advocate-civil').value;
+            const maxCourt = document.getElementById('advocate-max-court').value || '6';
+            const dateIso = document.getElementById('advocate-date').value;  // YYYY-MM-DD
+            let dateStr = '';
+            if (dateIso) {
+                const [y, m, d] = dateIso.split('-');
+                dateStr = `${d}-${m}-${y}`;  // DD-MM-YYYY for bharat-courts
+            }
+            const messageEl = document.getElementById('advocate-message');
+            const resultsEl = document.getElementById('advocate-results');
+
+            if (!advocate) {
+                showMessage('advocate-message', 'Enter an advocate name (or surname).', 'error');
+                return;
+            }
+
+            const defaults = JSON.parse(localStorage.getItem('defaultCourt') || '{}');
+            if (!defaults.state || !defaults.dist || !defaults.complex) {
+                showMessage('advocate-message',
+                    'No default court saved. Go to Court Selection first.', 'error');
+                return;
+            }
+
+            showMessage('advocate-message',
+                `Scanning ${civil === 'true' ? 'Civil' : 'Criminal'} cause list for "${advocate}" across courts 1–${maxCourt}…`,
+                'info');
+            resultsEl.innerHTML = '';
+
+            try {
+                const params = new URLSearchParams({
+                    state: defaults.state,
+                    dist: defaults.dist,
+                    complex: defaults.complex,
+                    advocate: advocate,
+                    civil: civil,
+                    max_court: maxCourt,
+                });
+                if (dateStr) params.set('date', dateStr);
+                const resp = await fetch(`${API_BASE_URL}/api/scan-advocate?${params}`);
+                const result = await resp.json();
+
+                if (result.error) {
+                    showMessage('advocate-message', `Error: ${result.error}`, 'error');
+                    return;
+                }
+
+                const matches = result.data || [];
+                if (matches.length === 0) {
+                    showMessage('advocate-message',
+                        `No cases found for "${advocate}" in today's cause list. (Tried courts: ${result.query.court_nos_tried.join(', ')})`,
+                        'info');
+                    return;
+                }
+
+                showMessage('advocate-message',
+                    `Found ${matches.length} case(s) for "${advocate}".`, 'success');
+
+                let html = `<table><thead><tr>
+                    <th>Case Number</th>
+                    <th>Parties</th>
+                    <th>Role</th>
+                    <th>Petitioner Adv.</th>
+                    <th>Respondent Adv.</th>
+                    <th>Court #</th>
+                    <th>Item</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                </tr></thead><tbody>`;
+                matches.forEach((m, idx) => {
+                    html += `<tr>
+                        <td>${m.case_number || ''}<br><small>${m.case_type || ''}</small></td>
+                        <td>${(m.petitioner || '').slice(0, 40)}<br>vs<br>${(m.respondent || '').slice(0, 40)}</td>
+                        <td><strong>${m.advocate_role}</strong></td>
+                        <td>${m.advocate_petitioner || ''}</td>
+                        <td>${m.advocate_respondent || ''}</td>
+                        <td>${m.court_number || ''}</td>
+                        <td>${m.item_number || ''}</td>
+                        <td>${m.listing_date || ''}</td>
+                        <td><button class="btn-secondary" onclick='saveScannedCase(${idx})'>Save</button></td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                resultsEl.innerHTML = html;
+
+                window.__advocateScanResults = matches;
+            } catch (error) {
+                console.error('Advocate scan error:', error);
+                showMessage('advocate-message', `Error: ${error.message}`, 'error');
+            }
+        }
+
+        function saveScannedCase(idx) {
+            const matches = window.__advocateScanResults || [];
+            const m = matches[idx];
+            if (!m) return;
+            const saved = JSON.parse(localStorage.getItem('savedCases') || '[]');
+            saved.push({
+                case_number: m.case_number,
+                case_type: m.case_type,
+                petitioner: m.petitioner,
+                respondent: m.respondent,
+                next_hearing: m.listing_date,
+                advocate_role: m.advocate_role,
+                source: 'advocate-scan',
+                saved_at: new Date().toISOString(),
+            });
+            localStorage.setItem('savedCases', JSON.stringify(saved));
+            showMessage('advocate-message', `Saved ${m.case_number} to portfolio.`, 'success');
         }
 
         // ===== SAVED CASES TAB HANDLERS =====
