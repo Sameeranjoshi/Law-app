@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_file
 
 from bharat_courts import DistrictCourtClient
-from bharat_courts.districtcourts.parser import parse_complex_value
+from bharat_courts.districtcourts.parser import parse_complex_value, parse_case_status_html
 
 load_dotenv()
 
@@ -204,6 +204,45 @@ def case_lookup():
                 case_type=p["case_type"], case_number=p["case_number"],
                 year=p["year"],
             )
+            return [_case_to_dict(cs) for cs in cases]
+    try:
+        return _ok(_run(_go))
+    except Exception as e:
+        return _err(str(e), 500)
+
+
+@app.get("/api/search-advocate")
+def search_advocate():
+    """Search cases by advocate name — calls eCourts submitAdvName directly."""
+    p, err = _require("dist", "complex", "advocate")
+    if err:
+        return err
+    status = request.args.get("status", "Both")
+    code, _, _ = parse_complex_value(p["complex"])
+
+    async def _go():
+        async with DistrictCourtClient() as c:
+            def build_form(captcha):
+                return {
+                    "advocate_name": p["advocate"],
+                    "case_status": status,
+                    "adv_captcha_code": captcha,
+                    "state_code": STATE,
+                    "dist_code": p["dist"],
+                    "court_complex_code": code,
+                    "est_code": "",
+                    "case_type": "",
+                }
+            result = await c._post_with_captcha_retry(
+                "casestatus/submitAdvName",
+                build_form,
+                state_code=STATE,
+                dist_code=p["dist"],
+                court_complex_code=code,
+                est_code="",
+            )
+            html = result.get("adv_data", "")
+            cases = parse_case_status_html(html)
             return [_case_to_dict(cs) for cs in cases]
     try:
         return _ok(_run(_go))

@@ -52,6 +52,7 @@ a { color: #2a5db0; }
     <button onclick="switchTab('cause')">Cause List</button>
     <button onclick="switchTab('party')">Search by Party</button>
     <button onclick="switchTab('case')">Case Lookup</button>
+    <button onclick="switchTab('advsearch')">Search by Advocate</button>
     <button onclick="switchTab('advocate')">Advocate Scan</button>
     <button onclick="switchTab('orders')">Orders</button>
   </div>
@@ -132,7 +133,27 @@ a { color: #2a5db0; }
     <div id="case-results"></div>
   </div>
 
-  <!-- Tab 5: Advocate Scan -->
+  <!-- Tab 5: Search by Advocate -->
+  <div id="tab-advsearch" class="panel">
+    <div id="advsearch-court"></div>
+    <label for="advsearch-name">Advocate Name (min 3 characters)</label>
+    <input type="text" id="advsearch-name" value="Joshi J.A." placeholder="e.g. Joshi J.A.">
+    <div class="form-row">
+      <div>
+        <label for="advsearch-status">Status</label>
+        <select id="advsearch-status">
+          <option value="Both">Both</option>
+          <option value="Pending" selected>Pending</option>
+          <option value="Disposed">Disposed</option>
+        </select>
+      </div>
+    </div>
+    <button class="action" onclick="searchAdvocate()">Search</button>
+    <div id="advsearch-msg"></div>
+    <div id="advsearch-results"></div>
+  </div>
+
+  <!-- Tab 6: Advocate Scan -->
   <div id="tab-advocate" class="panel">
     <div id="adv-court"></div>
     <label for="adv-name">Advocate Name</label>
@@ -259,7 +280,7 @@ function switchTab(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
-  const tabNames = ['court','cause','party','case','advocate','orders'];
+  const tabNames = ['court','cause','party','case','advsearch','advocate','orders'];
   const idx = tabNames.indexOf(id);
   if (idx >= 0) document.querySelectorAll('.tabs button')[idx].classList.add('active');
 
@@ -451,7 +472,36 @@ async function lookupCase() {
   } catch (e) { showMsg('case-msg', 'Error: ' + e.message, 'error'); }
 }
 
-// ── Tab 5: Advocate Scan ───────────────────────────────────────────
+// ── Tab 5: Search by Advocate ──────────────────────────────────────
+async function searchAdvocate() {
+  const s = courtCheck('advsearch-msg');
+  if (!s) return;
+  const name = document.getElementById('advsearch-name').value.trim();
+  if (!name || name.length < 3) { showMsg('advsearch-msg', 'Enter at least 3 characters.', 'error'); return; }
+  const status = document.getElementById('advsearch-status').value;
+  showMsg('advsearch-msg', 'Searching for advocate "' + name + '"... (may take 15-30s, solving CAPTCHA)', 'loading');
+  document.getElementById('advsearch-results').innerHTML = '';
+  try {
+    const url = '/api/search-advocate?dist=' + encodeURIComponent(s.dist)
+      + '&complex=' + encodeURIComponent(s.complex)
+      + '&advocate=' + encodeURIComponent(name)
+      + '&status=' + encodeURIComponent(status);
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { showMsg('advsearch-msg', j.error, 'error'); return; }
+    showMsg('advsearch-msg', 'Found ' + j.count + ' cases for advocate "' + name + '".', 'success');
+    renderTable('advsearch-results', j.data, [
+      {key:'case_number', label:'Case Number'},
+      {key:'cnr_number', label:'CNR'},
+      {key:'petitioner', label:'Petitioner'},
+      {key:'respondent', label:'Respondent'},
+      {key:'status', label:'Status'},
+      {key:'next_hearing_date', label:'Next Hearing'},
+    ]);
+  } catch (e) { showMsg('advsearch-msg', 'Error: ' + e.message, 'error'); }
+}
+
+// ── Tab 6: Advocate Scan ───────────────────────────────────────────
 async function scanAdvocate() {
   const s = courtCheck('adv-msg');
   if (!s) return;
