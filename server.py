@@ -251,6 +251,47 @@ def search_advocate():
         return _err(str(e), 500)
 
 
+@app.get("/api/advocate-causelist")
+def advocate_causelist():
+    """Get an advocate's cause list for a date, by bar registration number."""
+    p, err = _require("dist", "complex", "bar_state", "bar_code", "bar_year", "date")
+    if err:
+        return err
+    code, _, _ = parse_complex_value(p["complex"])
+
+    async def _go():
+        async with DistrictCourtClient() as c:
+            def build_form(captcha):
+                return {
+                    "radAdvt": "3",
+                    "adv_bar_state": p["bar_state"],
+                    "adv_bar_code": p["bar_code"],
+                    "adv_bar_year": p["bar_year"],
+                    "caselist_date": p["date"],
+                    "adv_captcha_code": captcha,
+                    "state_code": STATE,
+                    "dist_code": p["dist"],
+                    "court_complex_code": code,
+                    "est_code": "",
+                    "case_type": "",
+                }
+            result = await c._post_with_captcha_retry(
+                "casestatus/submitAdvName",
+                build_form,
+                state_code=STATE,
+                dist_code=p["dist"],
+                court_complex_code=code,
+                est_code="",
+            )
+            html = result.get("adv_data", "")
+            cases = parse_case_status_html(html)
+            return [_case_to_dict(cs) for cs in cases]
+    try:
+        return _ok(_run(_go))
+    except Exception as e:
+        return _err(str(e), 500)
+
+
 @app.get("/api/scan-advocate")
 def scan_advocate():
     p, err = _require("dist", "complex", "advocate")
