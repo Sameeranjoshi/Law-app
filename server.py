@@ -224,6 +224,7 @@ def search_advocate():
         async with DistrictCourtClient() as c:
             def build_form(captcha):
                 return {
+                    "radAdvt": "1",
                     "advocate_name": p["advocate"],
                     "case_status": status,
                     "adv_captcha_code": captcha,
