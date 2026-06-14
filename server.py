@@ -26,12 +26,16 @@ from bharat_courts.districtcourts.parser import (
 )
 from bs4 import BeautifulSoup
 
+import db
+
 load_dotenv()
 
 app = Flask(__name__)
 PORT = int(os.getenv("FLASK_PORT", 5002))
 STATE = "1"  # Maharashtra
 MAX_RETRIES = 3
+
+db.init()  # create tables on startup
 
 
 # ── infrastructure ─────────────────────────────────────────────────────
@@ -72,6 +76,23 @@ def _norm(s):
     return re.sub(r"[\s.]+", "", (s or "").lower())
 
 
+def _force_refresh():
+    return request.args.get("refresh", "").lower() in ("1", "true", "yes")
+
+
+def _today_dd():
+    return time.strftime("%d-%m-%Y", time.localtime())
+
+
+def _is_past_date(date_str):
+    """date_str is DD-MM-YYYY. Returns True if strictly before today."""
+    try:
+        t = time.strptime(date_str, "%d-%m-%Y")
+        return time.mktime(t) < time.mktime(time.strptime(_today_dd(), "%d-%m-%Y"))
+    except Exception:
+        return False
+
+
 # ── routes ─────────────────────────────────────────────────────────────
 
 @app.get("/")
@@ -88,13 +109,19 @@ def health():
 
 @app.get("/api/districts")
 def districts():
+    key = STATE
+    if not _force_refresh():
+        cached, age = db.get_cached("districts", key, db.TTL["districts"])
+        if cached is not None:
+            return _ok(cached, cached=True, age_seconds=age)
     async def _go():
         async with DistrictCourtClient() as c:
             return await c.list_districts(STATE)
     try:
         d = _run(_go)
         items = [{"code": k, "name": v} for k, v in sorted(d.items(), key=lambda x: x[1])]
-        return _ok(items)
+        db.put_cached("districts", key, items, len(items))
+        return _ok(items, cached=False, age_seconds=0)
     except Exception as e:
         return _err(str(e), 500)
 
@@ -104,13 +131,19 @@ def complexes():
     p, err = _require("dist")
     if err:
         return err
+    key = f"{STATE}/{p['dist']}"
+    if not _force_refresh():
+        cached, age = db.get_cached("complexes", key, db.TTL["complexes"])
+        if cached is not None:
+            return _ok(cached, cached=True, age_seconds=age)
     async def _go():
         async with DistrictCourtClient() as c:
             return await c.list_complexes(STATE, p["dist"])
     try:
         d = _run(_go)
         items = [{"code": k, "name": v} for k, v in sorted(d.items(), key=lambda x: x[1])]
-        return _ok(items)
+        db.put_cached("complexes", key, items, len(items))
+        return _ok(items, cached=False, age_seconds=0)
     except Exception as e:
         return _err(str(e), 500)
 
@@ -125,6 +158,12 @@ def search_advocate():
         return err
     status = request.args.get("status", "Both")
     code, _, _ = parse_complex_value(p["complex"])
+    cache_key = f"{p['dist']}|{code}|{_norm(p['advocate'])}|{status}"
+
+    if not _force_refresh():
+        cached, age = db.get_cached("search_advocate", cache_key, db.TTL["search_advocate"])
+        if cached is not None:
+            return _ok(cached, cached=True, age_seconds=age)
 
     async def _go():
         async with DistrictCourtClient() as c:
@@ -168,7 +207,25 @@ def search_advocate():
                 out.append(d)
             return out
     try:
-        return _ok(_run(_go))
+        out = _run(_go)
+        # persist every case so /api/my-cases sees them
+        for d in out:
+            vp = d.get("_view_params", {}) or {}
+            db.upsert_case({
+                "cnr": d.get("cnr_number"),
+                "case_number": d.get("case_number"),
+                "case_type": d.get("case_type"),
+                "petitioner": d.get("petitioner"),
+                "respondent": d.get("respondent"),
+                "status": d.get("status"),
+                "next_hearing": d.get("next_hearing_date"),
+                "case_no_id": vp.get("case_no_id"),
+                "court_code": vp.get("court_code"),
+                "advocate_seen": p["advocate"],
+                "source_query": f"search_advocate:{cache_key}",
+            })
+        db.put_cached("search_advocate", cache_key, out, len(out))
+        return _ok(out, cached=False, age_seconds=0)
     except Exception as e:
         return _err(str(e), 500)
 
@@ -251,6 +308,16 @@ def scan_advocate():
     else:
         list_types = [True, False]
 
+    cache_key = f"{p['dist']}|{code}|{needle}|{date_str}|{civil_arg}"
+    ttl = db.TTL["cause_list_scan_past"] if _is_past_date(date_str) else db.TTL["cause_list_scan_future"]
+    if not _force_refresh():
+        cached, age = db.get_cached("scan_advocate", cache_key, ttl)
+        if cached is not None:
+            return _ok(cached.get("matches", []), cached=True, age_seconds=age,
+                       courts_scanned=cached.get("courts_scanned", []),
+                       date=cached.get("date", date_str or "today"),
+                       advocate=p["advocate"])
+
     async def _go():
         async with DistrictCourtClient() as c:
             courts = await c.list_cause_list_courts(STATE, p["dist"], code, "")
@@ -298,7 +365,36 @@ def scan_advocate():
             return matches, scanned
     try:
         matches, scanned = _run(_go)
-        return _ok(matches, courts_scanned=scanned, date=date_str or "today", advocate=p["advocate"])
+        # persist cases + cause list entries
+        for m in matches:
+            vp = m.get("_view_params", {}) or {}
+            db.upsert_case({
+                "cnr": m.get("cnr_number"),
+                "case_number": m.get("case_number"),
+                "case_type": m.get("case_type"),
+                "year": m.get("year"),
+                "petitioner": m.get("petitioner"),
+                "respondent": m.get("respondent"),
+                "court_no": m.get("court_no"),
+                "court_name": m.get("court_name"),
+                "case_no_id": vp.get("case_no_id"),
+                "court_code": vp.get("court_code"),
+                "advocate_seen": p["advocate"],
+                "source_query": f"scan_advocate:{cache_key}",
+            })
+            if m.get("cnr_number") and date_str:
+                db.upsert_cause_list_entry({
+                    "date": date_str,
+                    "court_no": m.get("court_no"),
+                    "cnr": m.get("cnr_number"),
+                    "list_type": m.get("list_type"),
+                    "adv_petitioner": m.get("advocate_petitioner"),
+                    "adv_respondent": m.get("advocate_respondent"),
+                })
+        payload = {"matches": matches, "courts_scanned": scanned, "date": date_str or "today"}
+        db.put_cached("scan_advocate", cache_key, payload, len(matches))
+        return _ok(matches, cached=False, age_seconds=0, courts_scanned=scanned,
+                   date=date_str or "today", advocate=p["advocate"])
     except Exception as e:
         return _err(str(e), 500)
 
@@ -433,6 +529,13 @@ def case_detail():
     search_by = request.args.get("search_by", "CScaseNumber")
     code, _, _ = parse_complex_value(p["complex"])
 
+    if not _force_refresh():
+        cached, age = db.get_case_detail(p["cino"], db.TTL["case_detail"])
+        if cached is not None:
+            cached["_cached"] = True
+            cached["_age_seconds"] = age
+            return jsonify(cached)
+
     async def _go():
         async with DistrictCourtClient() as c:
             await c._init_session()
@@ -455,9 +558,45 @@ def case_detail():
             html = result.get("data_list", "")
             return _parse_case_detail(html)
     try:
-        return jsonify(_run(_go))
+        detail = _run(_go)
+        db.put_case_detail(p["cino"], detail)
+        # If we got case_details, update next_hearing on the case row
+        cs = detail.get("case_status", {})
+        nh = cs.get("Next Hearing Date") or cs.get("Next Hearing")
+        if nh:
+            db.upsert_case({"cnr": p["cino"], "next_hearing": nh,
+                            "status": cs.get("Case Stage") or cs.get("Case Status")})
+        detail["_cached"] = False
+        detail["_age_seconds"] = 0
+        return jsonify(detail)
     except Exception as e:
         return _err(str(e), 500)
+
+
+# ─── My Cases ──
+
+@app.get("/api/my-cases")
+def my_cases():
+    """List every case stored in the local DB. No eCourts call."""
+    advocate = request.args.get("advocate", "").strip() or None
+    limit = int(request.args.get("limit", "1000"))
+    rows = db.list_cases(advocate=advocate, limit=limit)
+    return _ok(rows, source="cache", total_in_db=db.case_count())
+
+
+@app.get("/api/stats")
+def stats_endpoint():
+    return jsonify(db.stats())
+
+
+@app.post("/api/refresh-cache")
+def refresh_cache():
+    """Wipe a specific cache key (useful for forcing a re-fetch)."""
+    p, err = _require("query_type", "key")
+    if err:
+        return err
+    db.invalidate(p["query_type"], p["key"])
+    return jsonify({"ok": True})
 
 
 # ── shared helpers ─────────────────────────────────────────────────────

@@ -4,3 +4,7 @@ node_modules/
 *.swo
 .DS_Store
 __pycache__/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

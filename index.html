@@ -56,6 +56,7 @@ a { color: #2a5db0; }
     <button class="active" onclick="switchTab('court')">1 · Select Court</button>
     <button onclick="switchTab('all')">2 · All Cases by Advocate</button>
     <button onclick="switchTab('daily')">3 · Daily Cause List by Advocate</button>
+    <button onclick="switchTab('mycases')">4 · My Cases (cached)</button>
   </div>
 
   <!-- Tab 1: Select Court -->
@@ -123,12 +124,44 @@ a { color: #2a5db0; }
     <div id="daily-msg"></div>
     <div id="daily-results"></div>
   </div>
+
+  <!-- Tab 4: My Cases (cache browser) -->
+  <div id="tab-mycases" class="panel">
+    <p style="color:#666;font-size:0.85rem;margin-bottom:10px">
+      Every case the app has ever fetched lives here. No eCourts call — instant local lookup.
+      Click <em>View ▼</em> to see full case detail (cached) or hit <em>Refresh from eCourts</em> to update.
+    </p>
+    <div class="form-row">
+      <div>
+        <label for="my-filter">Filter by advocate (optional)</label>
+        <input type="text" id="my-filter" placeholder="e.g. Joshi (leave empty for all)">
+      </div>
+      <div style="max-width:200px">
+        <label for="my-limit">Max rows</label>
+        <input type="number" id="my-limit" value="500" min="10" max="5000">
+      </div>
+    </div>
+    <button class="action" onclick="loadMyCases()">Load / Refresh</button>
+    <button class="action" style="background:#777" onclick="showStats()">Cache Stats</button>
+    <div id="my-msg"></div>
+    <div id="my-results"></div>
+  </div>
 </div>
 
 <script>
 // ───────── State ─────────
 let districtsLoaded = false;
-const lastResults = { all: [], daily: [] };
+const lastResults = { all: [], daily: [], mycases: [] };
+
+function ageBadge(j) {
+  if (!j || j.cached === undefined) return '';
+  if (!j.cached) return ' <span style="background:#d4edda;color:#155724;padding:2px 6px;border-radius:3px;font-size:0.75rem">fresh</span>';
+  const s = j.age_seconds || 0;
+  const mins = Math.floor(s / 60);
+  const hrs = Math.floor(mins / 60);
+  let age = mins < 60 ? `${mins} min` : `${hrs} hr`;
+  return ` <span style="background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:0.75rem" title="From local cache. Add &refresh=1 to bypass">cached · ${age} ago</span>`;
+}
 
 // ───────── Utilities ─────────
 function getSaved() {
@@ -140,6 +173,13 @@ function showMsg(elId, text, type) {
   el.className = 'msg ' + (type || '');
   el.textContent = text;
   el.style.display = text ? 'block' : 'none';
+}
+function showMsgHtml(elId, html, type) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.className = 'msg ' + (type || '');
+  el.innerHTML = html;
+  el.style.display = html ? 'block' : 'none';
 }
 function toDD(dateStr) {
   if (!dateStr) return '';
@@ -164,7 +204,8 @@ function switchTab(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
-  const tabNames = ['court', 'all', 'daily'];
+  const tabNames = ['court', 'all', 'daily', 'mycases'];
+  if (id === 'mycases') loadMyCases();
   const idx = tabNames.indexOf(id);
   if (idx >= 0) document.querySelectorAll('.tabs button')[idx].classList.add('active');
   if (id === 'court' && !districtsLoaded) loadDistricts();
@@ -240,24 +281,28 @@ function showSavedInfo() {
 }
 
 // ───────── Tab 2: All Cases by Advocate ─────────
-async function searchAdvocate() {
+async function searchAdvocate(forceRefresh) {
   const s = courtCheck('all-msg');
   if (!s) return;
   const name = document.getElementById('all-name').value.trim();
   if (!name || name.length < 3) { showMsg('all-msg', 'Enter at least 3 characters.', 'error'); return; }
   const status = document.getElementById('all-status').value;
-  showMsg('all-msg', 'Searching for advocate "' + name + '"… (may take 15–30s, solving CAPTCHA)', 'loading');
+  showMsg('all-msg', forceRefresh
+    ? 'Re-fetching from eCourts… (may take 15–30s, solving CAPTCHA)'
+    : 'Looking up advocate "' + name + '"… (instant from cache, or 15–30s if first time)', 'loading');
   document.getElementById('all-results').innerHTML = '';
   try {
     const url = '/api/search-advocate?dist=' + encodeURIComponent(s.dist)
       + '&complex=' + encodeURIComponent(s.complex)
       + '&advocate=' + encodeURIComponent(name)
-      + '&status=' + encodeURIComponent(status);
+      + '&status=' + encodeURIComponent(status)
+      + (forceRefresh ? '&refresh=1' : '');
     const r = await fetch(url);
     const j = await r.json();
     if (j.error) { showMsg('all-msg', j.error, 'error'); return; }
     lastResults.all = j.data || [];
-    showMsg('all-msg', 'Found ' + j.count + ' cases for "' + name + '".', 'success');
+    showMsgHtml('all-msg', 'Found ' + j.count + ' cases for "' + esc(name) + '".' + ageBadge(j)
+      + ' <button class="btn-link" onclick="searchAdvocate(true)">Force refresh from eCourts</button>', 'success');
     renderAllResults();
   } catch (e) { showMsg('all-msg', 'Error: ' + e.message, 'error'); }
 }
@@ -288,7 +333,7 @@ function renderAllResults() {
 }
 
 // ───────── Tab 3: Daily Cause List by Advocate ─────────
-async function scanCauseList() {
+async function scanCauseList(forceRefresh) {
   const s = courtCheck('daily-msg');
   if (!s) return;
   const name = document.getElementById('daily-name').value.trim();
@@ -296,24 +341,152 @@ async function scanCauseList() {
   const civil = document.getElementById('daily-civil').value;
   if (!name) { showMsg('daily-msg', 'Enter an advocate name.', 'error'); return; }
   if (!date) { showMsg('daily-msg', 'Select a date.', 'error'); return; }
-  showMsg('daily-msg', 'Scanning every court for "' + name + '" on ' + toDD(date) + '… (2–5 minutes)', 'loading');
+  showMsg('daily-msg', forceRefresh
+    ? 'Re-scanning every court for "' + name + '" on ' + toDD(date) + '… (2–5 minutes)'
+    : 'Looking up cause list for "' + name + '" on ' + toDD(date) + '… (instant from cache, or 2–5 min if first time)',
+    'loading');
   document.getElementById('daily-results').innerHTML = '';
   try {
     const url = '/api/scan-advocate?dist=' + encodeURIComponent(s.dist)
       + '&complex=' + encodeURIComponent(s.complex)
       + '&advocate=' + encodeURIComponent(name)
       + '&date=' + encodeURIComponent(toDD(date))
-      + '&civil=' + civil;
+      + '&civil=' + civil
+      + (forceRefresh ? '&refresh=1' : '');
     const r = await fetch(url);
     const j = await r.json();
     if (j.error) { showMsg('daily-msg', j.error, 'error'); return; }
     lastResults.daily = j.data || [];
-    showMsg('daily-msg',
-      'Found ' + j.count + ' hearings for "' + name + '" on ' + toDD(date)
-      + '. Scanned ' + (j.courts_scanned || []).length + ' court × type combos.',
+    showMsgHtml('daily-msg',
+      'Found ' + j.count + ' hearings for "' + esc(name) + '" on ' + esc(toDD(date))
+      + '. Scanned ' + (j.courts_scanned || []).length + ' court × type combos.' + ageBadge(j)
+      + ' <button class="btn-link" onclick="scanCauseList(true)">Force refresh from eCourts</button>',
       'success');
     renderDailyResults();
   } catch (e) { showMsg('daily-msg', 'Error: ' + e.message, 'error'); }
+}
+
+// ───────── Tab 4: My Cases (cache browser) ─────────
+async function loadMyCases() {
+  const filter = document.getElementById('my-filter') ? document.getElementById('my-filter').value.trim() : '';
+  const limit = document.getElementById('my-limit') ? document.getElementById('my-limit').value : '500';
+  showMsg('my-msg', 'Loading from local cache…', 'loading');
+  document.getElementById('my-results').innerHTML = '';
+  try {
+    const url = '/api/my-cases?limit=' + encodeURIComponent(limit)
+      + (filter ? '&advocate=' + encodeURIComponent(filter) : '');
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { showMsg('my-msg', j.error, 'error'); return; }
+    lastResults.mycases = j.data || [];
+    showMsg('my-msg', 'Showing ' + j.count + ' of ' + (j.total_in_db || 0) + ' cases in cache.', 'success');
+    renderMyCases();
+  } catch (e) { showMsg('my-msg', 'Error: ' + e.message, 'error'); }
+}
+
+function renderMyCases() {
+  const rows = lastResults.mycases;
+  const el = document.getElementById('my-results');
+  if (!rows.length) {
+    el.innerHTML = '<p class="msg loading">No cases in the local cache yet. Run a search in tabs 2 or 3 first.</p>';
+    return;
+  }
+  let html = '<table><tr>'
+    + '<th>#</th><th>Case Number</th><th>Type</th><th>Year</th>'
+    + '<th>Petitioner</th><th>Respondent</th>'
+    + '<th>Court</th><th>Status</th><th>Next Hearing</th>'
+    + '<th>Advocate</th><th>CNR</th><th>Details</th></tr>';
+  rows.forEach((r, i) => {
+    html += '<tr>'
+      + '<td>' + (i+1) + '</td>'
+      + '<td>' + esc(r.case_number) + '</td>'
+      + '<td>' + esc(r.case_type) + '</td>'
+      + '<td>' + esc(r.year || '') + '</td>'
+      + '<td>' + esc(r.petitioner) + '</td>'
+      + '<td>' + esc(r.respondent) + '</td>'
+      + '<td>' + esc(r.court_name) + '</td>'
+      + '<td>' + esc(r.status) + '</td>'
+      + '<td>' + esc(r.next_hearing || '') + '</td>'
+      + '<td>' + esc(r.advocate_seen) + '</td>'
+      + '<td>' + esc(r.cnr) + '</td>'
+      + '<td>' + (r.case_no_id && r.court_code ? '<button class="btn-link" onclick="toggleMyDetail(' + i + ')">View ▼</button>' : '—') + '</td>'
+      + '</tr>'
+      + '<tr id="detail-mycases-' + i + '" style="display:none"><td colspan="12" class="detail-row"><div id="detail-mycases-' + i + '-body">Loading…</div></td></tr>';
+  });
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+async function toggleMyDetail(idx) {
+  const row = document.getElementById('detail-mycases-' + idx);
+  const body = document.getElementById('detail-mycases-' + idx + '-body');
+  if (!row) return;
+  if (row.style.display === 'none') {
+    row.style.display = '';
+    if (body.dataset.loaded !== '1') {
+      const data = lastResults.mycases[idx];
+      const s = getSaved();
+      const url = '/api/case-detail?dist=' + encodeURIComponent(s.dist)
+        + '&complex=' + encodeURIComponent(s.complex)
+        + '&case_no_id=' + encodeURIComponent(data.case_no_id)
+        + '&cino=' + encodeURIComponent(data.cnr)
+        + '&court_code=' + encodeURIComponent(data.court_code)
+        + '&search_by=CScaseNumber';
+      try {
+        const r = await fetch(url);
+        const j = await r.json();
+        if (j.error) { body.innerHTML = '<em>Error: ' + esc(j.error) + '</em>'; return; }
+        const tag = j._cached
+          ? ' <span style="background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:0.75rem">cached</span>'
+          : ' <span style="background:#d4edda;color:#155724;padding:2px 6px;border-radius:3px;font-size:0.75rem">fresh</span>';
+        body.innerHTML = '<div style="text-align:right;margin-bottom:6px">' + tag
+          + ' <button class="btn-link" onclick="refreshMyDetail(' + idx + ')">Refresh from eCourts</button></div>'
+          + renderDetail(j);
+        body.dataset.loaded = '1';
+      } catch (e) { body.innerHTML = '<em>Error: ' + esc(e.message) + '</em>'; }
+    }
+  } else {
+    row.style.display = 'none';
+  }
+}
+
+async function refreshMyDetail(idx) {
+  const data = lastResults.mycases[idx];
+  const body = document.getElementById('detail-mycases-' + idx + '-body');
+  const s = getSaved();
+  body.innerHTML = 'Refreshing from eCourts…';
+  body.dataset.loaded = '';
+  const url = '/api/case-detail?dist=' + encodeURIComponent(s.dist)
+    + '&complex=' + encodeURIComponent(s.complex)
+    + '&case_no_id=' + encodeURIComponent(data.case_no_id)
+    + '&cino=' + encodeURIComponent(data.cnr)
+    + '&court_code=' + encodeURIComponent(data.court_code)
+    + '&search_by=CScaseNumber&refresh=1';
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { body.innerHTML = '<em>Error: ' + esc(j.error) + '</em>'; return; }
+    body.innerHTML = '<div style="text-align:right;margin-bottom:6px">'
+      + '<span style="background:#d4edda;color:#155724;padding:2px 6px;border-radius:3px;font-size:0.75rem">fresh</span>'
+      + ' <button class="btn-link" onclick="refreshMyDetail(' + idx + ')">Refresh from eCourts</button></div>'
+      + renderDetail(j);
+    body.dataset.loaded = '1';
+  } catch (e) { body.innerHTML = '<em>Error: ' + esc(e.message) + '</em>'; }
+}
+
+async function showStats() {
+  try {
+    const r = await fetch('/api/stats');
+    const j = await r.json();
+    showMsgHtml('my-msg',
+      '<strong>Local cache stats:</strong> '
+      + j.cases + ' cases · '
+      + j.case_details_cached + ' detail records · '
+      + j.cause_list_entries + ' cause list entries · '
+      + j.cached_queries + ' cached queries. '
+      + '<br><small>DB: ' + esc(j.db_path) + '</small>',
+      'info');
+  } catch (e) { showMsg('my-msg', 'Error: ' + e.message, 'error'); }
 }
 
 function renderDailyResults() {
