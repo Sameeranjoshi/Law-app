@@ -619,5 +619,9 @@ def _case_to_dict(c):
 
 
 if __name__ == "__main__":
-    print(f"\n  Maharashtra Courts → http://localhost:{PORT}\n")
-    app.run(host="localhost", port=PORT, debug=True)
+    # Bind to 0.0.0.0 when running in a deployed environment (Render injects PORT).
+    # Locally, stay on localhost.
+    is_deployed = bool(os.getenv("PORT") or os.getenv("RENDER"))
+    host = "0.0.0.0" if is_deployed else "localhost"
+    print(f"\n  Maharashtra Courts → http://{host}:{PORT}\n")
+    app.run(host=host, port=PORT, debug=not is_deployed)
