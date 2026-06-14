@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Maharashtra Courts</title>
+<title>Maharashtra Courts — Advocate Tracker</title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f5f5; color: #222; }
-.container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+.container { max-width: 1300px; margin: 0 auto; padding: 20px; }
 h1 { font-size: 1.6rem; margin-bottom: 2px; }
 .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 18px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 2px solid #ccc; margin-bottom: 16px; }
-.tabs button { padding: 8px 16px; border: none; background: #e8e8e8; cursor: pointer; font-size: 0.85rem; border-radius: 4px 4px 0 0; transition: background .15s; }
+.tabs button { padding: 10px 18px; border: none; background: #e8e8e8; cursor: pointer; font-size: 0.9rem; border-radius: 4px 4px 0 0; transition: background .15s; }
 .tabs button:hover { background: #d0d0d0; }
 .tabs button.active { background: #2a5db0; color: #fff; }
 .panel { display: none; }
@@ -20,128 +20,69 @@ label { display: block; font-weight: 600; margin: 10px 0 4px; font-size: 0.85rem
 select, input[type="text"], input[type="number"], input[type="date"] {
   width: 100%; padding: 7px 10px; border: 1px solid #bbb; border-radius: 4px; font-size: 0.9rem; margin-bottom: 6px;
 }
-button.action { padding: 8px 20px; background: #2a5db0; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; margin-top: 8px; }
+button.action { padding: 9px 22px; background: #2a5db0; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; margin-top: 8px; }
 button.action:hover { background: #1e4a8f; }
-button.action:disabled { background: #999; cursor: not-allowed; }
+.btn-link { background: none; border: none; color: #2a5db0; cursor: pointer; padding: 2px 8px; font-size: 0.82rem; text-decoration: underline; }
+.btn-link:hover { color: #1e4a8f; }
 .msg { padding: 10px 14px; border-radius: 4px; margin: 10px 0; font-size: 0.88rem; }
 .msg.error { background: #fdecea; color: #b71c1c; }
 .msg.success { background: #e8f5e9; color: #1b5e20; }
 .msg.loading { background: #eceff1; color: #555; }
+.msg.info { background: #e3f2fd; color: #0d47a1; }
 table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.82rem; }
-th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
-th { background: #2a5db0; color: #fff; font-weight: 600; }
-tr:nth-child(even) { background: #f0f4fa; }
-.detail-card { background: #fff; border: 1px solid #ccc; border-radius: 6px; padding: 16px; margin-top: 12px; }
-.detail-card .row { display: flex; padding: 5px 0; border-bottom: 1px solid #eee; }
-.detail-card .row:last-child { border-bottom: none; }
-.detail-card .lbl { font-weight: 600; width: 180px; flex-shrink: 0; font-size: 0.85rem; color: #555; }
-.detail-card .val { font-size: 0.88rem; }
+th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
+th { background: #2a5db0; color: #fff; font-weight: 600; font-size: 0.78rem; }
+tr:nth-child(even) > td { background: #f0f4fa; }
+.detail-row td { background: #fffbea !important; padding: 12px 16px; border-top: 2px solid #f4c542; }
+.detail-card h4 { margin: 10px 0 6px; color: #2a5db0; font-size: 0.92rem; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
+.detail-card .kv { display: grid; grid-template-columns: 180px 1fr; gap: 4px 12px; font-size: 0.85rem; }
+.detail-card .kv .k { font-weight: 600; color: #555; }
+.detail-card table.history { margin-top: 4px; font-size: 0.78rem; }
+.detail-card table.history th { background: #6a8fbf; }
 .form-row { display: flex; gap: 12px; flex-wrap: wrap; }
 .form-row > div { flex: 1; min-width: 180px; }
 .saved-info { background: #e3f2fd; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; margin-bottom: 10px; }
+.role-petitioner { background: #d4edda; padding: 2px 6px; border-radius: 3px; font-weight: 600; color: #155724; }
+.role-respondent { background: #d1ecf1; padding: 2px 6px; border-radius: 3px; font-weight: 600; color: #0c5460; }
 a { color: #2a5db0; }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>Maharashtra Courts</h1>
-  <p class="subtitle">District court queries via bharat-courts</p>
+  <h1>Maharashtra Courts — Advocate Tracker</h1>
+  <p class="subtitle">Look up an advocate's caseload via bharat-courts / eCourts</p>
 
   <div class="tabs">
-    <button class="active" onclick="switchTab('court')">Select Court</button>
-    <button onclick="switchTab('cause')">Cause List</button>
-    <button onclick="switchTab('party')">Search by Party</button>
-    <button onclick="switchTab('case')">Case Lookup</button>
-    <button onclick="switchTab('advsearch')">All Cases by Advocate</button>
-    <button onclick="switchTab('advcl')">Daily Cause List by Advocate</button>
-    <button onclick="switchTab('orders')">Orders</button>
+    <button class="active" onclick="switchTab('court')">1 · Select Court</button>
+    <button onclick="switchTab('all')">2 · All Cases by Advocate</button>
+    <button onclick="switchTab('daily')">3 · Daily Cause List by Advocate</button>
   </div>
 
   <!-- Tab 1: Select Court -->
   <div id="tab-court" class="panel active">
     <div id="court-saved"></div>
     <label for="sel-dist">District</label>
-    <select id="sel-dist" onchange="loadComplexes()"><option value="">-- loading districts --</option></select>
+    <select id="sel-dist" onchange="loadComplexes()"><option value="">— loading districts —</option></select>
     <label for="sel-complex">Court Complex</label>
-    <select id="sel-complex"><option value="">-- select district first --</option></select>
+    <select id="sel-complex"><option value="">— select district first —</option></select>
     <button class="action" onclick="saveDefault()">Save as Default</button>
     <div id="court-msg"></div>
   </div>
 
-  <!-- Tab 2: Cause List -->
-  <div id="tab-cause" class="panel">
-    <div id="cause-court"></div>
+  <!-- Tab 2: All Cases by Advocate -->
+  <div id="tab-all" class="panel">
+    <div id="all-court"></div>
+    <p style="color:#666;font-size:0.85rem;margin-bottom:10px">
+      One eCourts search returning every case where the advocate's name appears in the saved court complex.
+    </p>
     <div class="form-row">
       <div>
-        <label for="cause-date">Date</label>
-        <input type="date" id="cause-date">
+        <label for="all-name">Advocate Name (min 3 characters)</label>
+        <input type="text" id="all-name" value="Joshi J.A." placeholder="e.g. Joshi J.A.">
       </div>
       <div>
-        <label for="cause-civil">Type</label>
-        <select id="cause-civil">
-          <option value="true">Civil</option>
-          <option value="false">Criminal</option>
-        </select>
-      </div>
-    </div>
-    <button class="action" onclick="fetchCauseList()">Fetch</button>
-    <div id="cause-msg"></div>
-    <div id="cause-results"></div>
-  </div>
-
-  <!-- Tab 3: Search by Party -->
-  <div id="tab-party" class="panel">
-    <div id="party-court"></div>
-    <label for="party-name">Party Name</label>
-    <input type="text" id="party-name" placeholder="Enter party name">
-    <div class="form-row">
-      <div>
-        <label for="party-year">Year</label>
-        <input type="number" id="party-year" value="2025">
-      </div>
-      <div>
-        <label for="party-status">Status</label>
-        <select id="party-status">
-          <option value="Both">Both</option>
-          <option value="Pending">Pending</option>
-          <option value="Disposed">Disposed</option>
-        </select>
-      </div>
-    </div>
-    <button class="action" onclick="searchParty()">Search</button>
-    <div id="party-msg"></div>
-    <div id="party-results"></div>
-  </div>
-
-  <!-- Tab 4: Case Lookup -->
-  <div id="tab-case" class="panel">
-    <div id="case-court"></div>
-    <label for="case-type">Case Type</label>
-    <select id="case-type"><option value="">-- loading --</option></select>
-    <div class="form-row">
-      <div>
-        <label for="case-number">Case Number</label>
-        <input type="text" id="case-number" placeholder="e.g. 123">
-      </div>
-      <div>
-        <label for="case-year">Year</label>
-        <input type="number" id="case-year" value="2025">
-      </div>
-    </div>
-    <button class="action" onclick="lookupCase()">Lookup</button>
-    <div id="case-msg"></div>
-    <div id="case-results"></div>
-  </div>
-
-  <!-- Tab 5: Search by Advocate -->
-  <div id="tab-advsearch" class="panel">
-    <div id="advsearch-court"></div>
-    <label for="advsearch-name">Advocate Name (min 3 characters)</label>
-    <input type="text" id="advsearch-name" value="Joshi J.A." placeholder="e.g. Joshi J.A.">
-    <div class="form-row">
-      <div>
-        <label for="advsearch-status">Status</label>
-        <select id="advsearch-status">
+        <label for="all-status">Status</label>
+        <select id="all-status">
           <option value="Both">Both</option>
           <option value="Pending" selected>Pending</option>
           <option value="Disposed">Disposed</option>
@@ -149,72 +90,50 @@ a { color: #2a5db0; }
       </div>
     </div>
     <button class="action" onclick="searchAdvocate()">Search</button>
-    <div id="advsearch-msg"></div>
-    <div id="advsearch-results"></div>
+    <div id="all-msg"></div>
+    <div id="all-results"></div>
   </div>
 
-  <!-- Tab 6: Daily Cause List by Advocate -->
-  <div id="tab-advcl" class="panel">
-    <div id="advcl-court"></div>
+  <!-- Tab 3: Daily Cause List by Advocate -->
+  <div id="tab-daily" class="panel">
+    <div id="daily-court"></div>
     <p style="color:#666;font-size:0.85rem;margin-bottom:10px">
-      Scans every court in the complex on the given date and returns cases where the advocate appears.
-      This takes 2-5 minutes (one CAPTCHA solve per court × 2 list types).
+      Scans every court's cause list on the given date and returns cases where the advocate appears.
+      Takes 2–5 minutes (CAPTCHA solve per court × type).
     </p>
     <div class="form-row">
       <div>
-        <label for="advcl-name">Advocate Name (or surname)</label>
-        <input type="text" id="advcl-name" value="Joshi J.A." placeholder="e.g. Joshi J.A.">
+        <label for="daily-name">Advocate Name</label>
+        <input type="text" id="daily-name" value="Joshi J.A." placeholder="e.g. Joshi J.A.">
       </div>
       <div>
-        <label for="advcl-date">Cause List Date</label>
-        <input type="date" id="advcl-date">
+        <label for="daily-date">Date</label>
+        <input type="date" id="daily-date">
       </div>
       <div>
-        <label for="advcl-civil">List Type</label>
-        <select id="advcl-civil">
+        <label for="daily-civil">List Type</label>
+        <select id="daily-civil">
           <option value="both" selected>Both</option>
           <option value="true">Civil</option>
           <option value="false">Criminal</option>
         </select>
       </div>
     </div>
-    <button class="action" onclick="fetchAdvCauseList()">Scan Cause Lists</button>
-    <div id="advcl-msg"></div>
-    <div id="advcl-results"></div>
-  </div>
-
-  <!-- Tab 7: Orders -->
-  <div id="tab-orders" class="panel">
-    <div id="orders-court"></div>
-    <label for="orders-type">Case Type</label>
-    <select id="orders-type"><option value="">-- loading --</option></select>
-    <div class="form-row">
-      <div>
-        <label for="orders-number">Case Number</label>
-        <input type="text" id="orders-number" placeholder="e.g. 123">
-      </div>
-      <div>
-        <label for="orders-year">Year</label>
-        <input type="number" id="orders-year" value="2025">
-      </div>
-    </div>
-    <button class="action" onclick="fetchOrders()">Fetch Orders</button>
-    <div id="orders-msg"></div>
-    <div id="orders-results"></div>
+    <button class="action" onclick="scanCauseList()">Scan Cause Lists</button>
+    <div id="daily-msg"></div>
+    <div id="daily-results"></div>
   </div>
 </div>
 
 <script>
-// ── State ──────────────────────────────────────────────────────────
+// ───────── State ─────────
 let districtsLoaded = false;
-let caseTypesLoaded = { 'case-type': false, 'orders-type': false };
+const lastResults = { all: [], daily: [] };
 
-// ── Utility ────────────────────────────────────────────────────────
+// ───────── Utilities ─────────
 function getSaved() {
-  try { const v = localStorage.getItem('court'); return v ? JSON.parse(v) : null; }
-  catch { return null; }
+  try { const v = localStorage.getItem('court'); return v ? JSON.parse(v) : null; } catch { return null; }
 }
-
 function showMsg(elId, text, type) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -222,89 +141,44 @@ function showMsg(elId, text, type) {
   el.textContent = text;
   el.style.display = text ? 'block' : 'none';
 }
-
 function toDD(dateStr) {
   if (!dateStr) return '';
   const [y, m, d] = dateStr.split('-');
   return d + '-' + m + '-' + y;
 }
-
-function renderTable(elId, rows, columns) {
-  const el = document.getElementById(elId);
-  if (!rows || rows.length === 0) {
-    el.innerHTML = '<p class="msg loading">No results.</p>';
-    return;
-  }
-  let html = '<table><tr>';
-  columns.forEach(c => html += '<th>' + esc(c.label) + '</th>');
-  html += '</tr>';
-  rows.forEach(r => {
-    html += '<tr>';
-    columns.forEach(c => {
-      let val = r[c.key] != null ? r[c.key] : '';
-      if (c.render) val = c.render(val, r);
-      else val = esc(String(val));
-      html += '<td>' + val + '</td>';
-    });
-    html += '</tr>';
-  });
-  html += '</table>';
-  el.innerHTML = html;
-}
-
-function renderCard(elId, obj) {
-  const el = document.getElementById(elId);
-  if (!obj) { el.innerHTML = '<p class="msg loading">No data.</p>'; return; }
-  let html = '<div class="detail-card">';
-  for (const [k, v] of Object.entries(obj)) {
-    if (v == null || v === '') continue;
-    const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    html += '<div class="row"><span class="lbl">' + esc(label) + '</span><span class="val">' + esc(String(v)) + '</span></div>';
-  }
-  html += '</div>';
-  el.innerHTML = html;
-}
-
 function esc(s) {
   const d = document.createElement('div');
-  d.textContent = s;
+  d.textContent = s == null ? '' : String(s);
   return d.innerHTML;
 }
-
 function courtCheck(msgId) {
   const s = getSaved();
-  if (!s) {
-    showMsg(msgId, 'Please select a court in the first tab.', 'error');
-    return null;
-  }
+  if (!s) { showMsg(msgId, 'Please select a court in tab 1 first.', 'error'); return null; }
   const infoEl = document.getElementById(msgId.replace('-msg', '-court'));
   if (infoEl) infoEl.innerHTML = '<div class="saved-info">Court: ' + esc(s.dist_name) + ' → ' + esc(s.complex_name) + '</div>';
   return s;
 }
 
-// ── Tab switching ──────────────────────────────────────────────────
+// ───────── Tab switching ─────────
 function switchTab(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
-  const tabNames = ['court','cause','party','case','advsearch','advcl','orders'];
+  const tabNames = ['court', 'all', 'daily'];
   const idx = tabNames.indexOf(id);
   if (idx >= 0) document.querySelectorAll('.tabs button')[idx].classList.add('active');
-
   if (id === 'court' && !districtsLoaded) loadDistricts();
-  if (id === 'case' && !caseTypesLoaded['case-type']) loadCaseTypes('case-type');
-  if (id === 'orders' && !caseTypesLoaded['orders-type']) loadCaseTypes('orders-type');
 }
 
-// ── Tab 1: Select Court ────────────────────────────────────────────
+// ───────── Tab 1: Court Selection ─────────
 async function loadDistricts() {
   const sel = document.getElementById('sel-dist');
-  sel.innerHTML = '<option value="">-- loading... --</option>';
+  sel.innerHTML = '<option value="">— loading —</option>';
   try {
     const r = await fetch('/api/districts');
     const j = await r.json();
     if (j.error) { showMsg('court-msg', j.error, 'error'); return; }
-    sel.innerHTML = '<option value="">-- select district --</option>';
+    sel.innerHTML = '<option value="">— select district —</option>';
     j.data.forEach(d => {
       const o = document.createElement('option');
       o.value = d.code; o.textContent = d.name;
@@ -316,20 +190,20 @@ async function loadDistricts() {
       sel.value = saved.dist;
       if (sel.value === saved.dist) await loadComplexes();
     }
+    showSavedInfo();
   } catch (e) { showMsg('court-msg', 'Failed to load districts: ' + e.message, 'error'); }
 }
-
 async function loadComplexes() {
   const distSel = document.getElementById('sel-dist');
   const compSel = document.getElementById('sel-complex');
   const dist = distSel.value;
-  if (!dist) { compSel.innerHTML = '<option value="">-- select district first --</option>'; return; }
-  compSel.innerHTML = '<option value="">-- loading... --</option>';
+  if (!dist) { compSel.innerHTML = '<option value="">— select district first —</option>'; return; }
+  compSel.innerHTML = '<option value="">— loading —</option>';
   try {
     const r = await fetch('/api/complexes?dist=' + encodeURIComponent(dist));
     const j = await r.json();
     if (j.error) { showMsg('court-msg', j.error, 'error'); return; }
-    compSel.innerHTML = '<option value="">-- select complex --</option>';
+    compSel.innerHTML = '<option value="">— select complex —</option>';
     j.data.forEach(d => {
       const o = document.createElement('option');
       o.value = d.code; o.textContent = d.name;
@@ -339,7 +213,6 @@ async function loadComplexes() {
     if (saved && saved.dist === dist) compSel.value = saved.complex;
   } catch (e) { showMsg('court-msg', 'Failed to load complexes: ' + e.message, 'error'); }
 }
-
 function saveDefault() {
   const dist = document.getElementById('sel-dist');
   const comp = document.getElementById('sel-complex');
@@ -348,16 +221,14 @@ function saveDefault() {
     return;
   }
   const data = {
-    dist: dist.value,
-    complex: comp.value,
+    dist: dist.value, complex: comp.value,
     dist_name: dist.options[dist.selectedIndex].text,
-    complex_name: comp.options[comp.selectedIndex].text
+    complex_name: comp.options[comp.selectedIndex].text,
   };
   localStorage.setItem('court', JSON.stringify(data));
   showMsg('court-msg', 'Saved: ' + data.dist_name + ' → ' + data.complex_name, 'success');
   showSavedInfo();
 }
-
 function showSavedInfo() {
   const saved = getSaved();
   const el = document.getElementById('court-saved');
@@ -368,126 +239,15 @@ function showSavedInfo() {
   }
 }
 
-// ── Tab 2: Cause List ──────────────────────────────────────────────
-async function fetchCauseList() {
-  const s = courtCheck('cause-msg');
-  if (!s) return;
-  const date = document.getElementById('cause-date').value;
-  const civil = document.getElementById('cause-civil').value;
-  showMsg('cause-msg', 'Loading cause list... (may take 15-30s, solving CAPTCHA)', 'loading');
-  document.getElementById('cause-results').innerHTML = '';
-  try {
-    const url = '/api/cause-list?dist=' + encodeURIComponent(s.dist)
-      + '&complex=' + encodeURIComponent(s.complex)
-      + '&date=' + encodeURIComponent(toDD(date))
-      + '&civil=' + civil;
-    const r = await fetch(url);
-    const j = await r.json();
-    if (j.error) { showMsg('cause-msg', j.error, 'error'); return; }
-    showMsg('cause-msg', 'Found ' + j.count + ' entries.', 'success');
-    renderTable('cause-results', j.data, [
-      {key:'item_number', label:'Item #'},
-      {key:'case_number', label:'Case Number'},
-      {key:'case_type', label:'Case Type'},
-      {key:'petitioner', label:'Petitioner'},
-      {key:'respondent', label:'Respondent'},
-      {key:'advocate_petitioner', label:'Pet. Advocate'},
-      {key:'advocate_respondent', label:'Resp. Advocate'},
-      {key:'court_number', label:'Court #'},
-      {key:'judge', label:'Judge'},
-    ]);
-  } catch (e) { showMsg('cause-msg', 'Error: ' + e.message, 'error'); }
-}
-
-// ── Tab 3: Search by Party ─────────────────────────────────────────
-async function searchParty() {
-  const s = courtCheck('party-msg');
-  if (!s) return;
-  const party = document.getElementById('party-name').value.trim();
-  if (!party) { showMsg('party-msg', 'Please enter a party name.', 'error'); return; }
-  const year = document.getElementById('party-year').value;
-  const status = document.getElementById('party-status').value;
-  showMsg('party-msg', 'Searching... (may take 15-30s, solving CAPTCHA)', 'loading');
-  document.getElementById('party-results').innerHTML = '';
-  try {
-    const url = '/api/search-party?dist=' + encodeURIComponent(s.dist)
-      + '&complex=' + encodeURIComponent(s.complex)
-      + '&party=' + encodeURIComponent(party)
-      + '&year=' + encodeURIComponent(year)
-      + '&status=' + encodeURIComponent(status);
-    const r = await fetch(url);
-    const j = await r.json();
-    if (j.error) { showMsg('party-msg', j.error, 'error'); return; }
-    showMsg('party-msg', 'Found ' + j.count + ' cases.', 'success');
-    renderTable('party-results', j.data, [
-      {key:'case_number', label:'Case Number'},
-      {key:'cnr_number', label:'CNR'},
-      {key:'petitioner', label:'Petitioner'},
-      {key:'respondent', label:'Respondent'},
-      {key:'status', label:'Status'},
-      {key:'next_hearing_date', label:'Next Hearing'},
-    ]);
-  } catch (e) { showMsg('party-msg', 'Error: ' + e.message, 'error'); }
-}
-
-// ── Tab 4: Case Lookup ─────────────────────────────────────────────
-async function loadCaseTypes(selectId) {
-  const s = getSaved();
-  if (!s) return;
-  const sel = document.getElementById(selectId);
-  sel.innerHTML = '<option value="">-- loading... --</option>';
-  try {
-    const url = '/api/case-types?dist=' + encodeURIComponent(s.dist)
-      + '&complex=' + encodeURIComponent(s.complex);
-    const r = await fetch(url);
-    const j = await r.json();
-    if (j.error) return;
-    sel.innerHTML = '<option value="">-- select case type --</option>';
-    j.data.forEach(d => {
-      const o = document.createElement('option');
-      o.value = d.code; o.textContent = d.name;
-      sel.appendChild(o);
-    });
-    caseTypesLoaded[selectId] = true;
-  } catch (e) { /* silent */ }
-}
-
-async function lookupCase() {
-  const s = courtCheck('case-msg');
-  if (!s) return;
-  const ct = document.getElementById('case-type').value;
-  const cn = document.getElementById('case-number').value.trim();
-  const cy = document.getElementById('case-year').value;
-  if (!ct || !cn || !cy) { showMsg('case-msg', 'Please fill all fields.', 'error'); return; }
-  showMsg('case-msg', 'Looking up case... (may take 15-30s, solving CAPTCHA)', 'loading');
-  document.getElementById('case-results').innerHTML = '';
-  try {
-    const url = '/api/case?dist=' + encodeURIComponent(s.dist)
-      + '&complex=' + encodeURIComponent(s.complex)
-      + '&case_type=' + encodeURIComponent(ct)
-      + '&case_number=' + encodeURIComponent(cn)
-      + '&year=' + encodeURIComponent(cy);
-    const r = await fetch(url);
-    const j = await r.json();
-    if (j.error) { showMsg('case-msg', j.error, 'error'); return; }
-    if (!j.data || j.data.length === 0) {
-      showMsg('case-msg', 'No case found.', 'loading');
-      return;
-    }
-    showMsg('case-msg', 'Case found.', 'success');
-    renderCard('case-results', j.data[0]);
-  } catch (e) { showMsg('case-msg', 'Error: ' + e.message, 'error'); }
-}
-
-// ── Tab 5: Search by Advocate ──────────────────────────────────────
+// ───────── Tab 2: All Cases by Advocate ─────────
 async function searchAdvocate() {
-  const s = courtCheck('advsearch-msg');
+  const s = courtCheck('all-msg');
   if (!s) return;
-  const name = document.getElementById('advsearch-name').value.trim();
-  if (!name || name.length < 3) { showMsg('advsearch-msg', 'Enter at least 3 characters.', 'error'); return; }
-  const status = document.getElementById('advsearch-status').value;
-  showMsg('advsearch-msg', 'Searching for advocate "' + name + '"... (may take 15-30s, solving CAPTCHA)', 'loading');
-  document.getElementById('advsearch-results').innerHTML = '';
+  const name = document.getElementById('all-name').value.trim();
+  if (!name || name.length < 3) { showMsg('all-msg', 'Enter at least 3 characters.', 'error'); return; }
+  const status = document.getElementById('all-status').value;
+  showMsg('all-msg', 'Searching for advocate "' + name + '"… (may take 15–30s, solving CAPTCHA)', 'loading');
+  document.getElementById('all-results').innerHTML = '';
   try {
     const url = '/api/search-advocate?dist=' + encodeURIComponent(s.dist)
       + '&complex=' + encodeURIComponent(s.complex)
@@ -495,30 +255,49 @@ async function searchAdvocate() {
       + '&status=' + encodeURIComponent(status);
     const r = await fetch(url);
     const j = await r.json();
-    if (j.error) { showMsg('advsearch-msg', j.error, 'error'); return; }
-    showMsg('advsearch-msg', 'Found ' + j.count + ' cases for advocate "' + name + '".', 'success');
-    renderTable('advsearch-results', j.data, [
-      {key:'case_number', label:'Case Number'},
-      {key:'cnr_number', label:'CNR'},
-      {key:'petitioner', label:'Petitioner'},
-      {key:'respondent', label:'Respondent'},
-      {key:'status', label:'Status'},
-      {key:'next_hearing_date', label:'Next Hearing'},
-    ]);
-  } catch (e) { showMsg('advsearch-msg', 'Error: ' + e.message, 'error'); }
+    if (j.error) { showMsg('all-msg', j.error, 'error'); return; }
+    lastResults.all = j.data || [];
+    showMsg('all-msg', 'Found ' + j.count + ' cases for "' + name + '".', 'success');
+    renderAllResults();
+  } catch (e) { showMsg('all-msg', 'Error: ' + e.message, 'error'); }
 }
 
-// ── Tab 6: Daily Cause List by Advocate ──────────────────────────
-async function fetchAdvCauseList() {
-  const s = courtCheck('advcl-msg');
+function renderAllResults() {
+  const rows = lastResults.all;
+  const el = document.getElementById('all-results');
+  if (!rows.length) { el.innerHTML = '<p class="msg loading">No results.</p>'; return; }
+  let html = '<table><tr>'
+    + '<th>#</th><th>Case Number</th><th>CNR</th>'
+    + '<th>Petitioner</th><th>Respondent</th>'
+    + '<th>Status</th><th>Next Hearing</th><th>Details</th></tr>';
+  rows.forEach((r, i) => {
+    html += '<tr>'
+      + '<td>' + (i+1) + '</td>'
+      + '<td>' + esc(r.case_number) + '</td>'
+      + '<td>' + esc(r.cnr_number) + '</td>'
+      + '<td>' + esc(r.petitioner) + '</td>'
+      + '<td>' + esc(r.respondent) + '</td>'
+      + '<td>' + esc(r.status) + '</td>'
+      + '<td>' + esc(r.next_hearing_date || '') + '</td>'
+      + '<td>' + (r._view_params ? '<button class="btn-link" onclick="toggleDetails(\'all\',' + i + ')">View ▼</button>' : '—') + '</td>'
+      + '</tr>'
+      + '<tr id="detail-all-' + i + '" style="display:none"><td colspan="8" class="detail-row"><div id="detail-all-' + i + '-body">Loading…</div></td></tr>';
+  });
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+// ───────── Tab 3: Daily Cause List by Advocate ─────────
+async function scanCauseList() {
+  const s = courtCheck('daily-msg');
   if (!s) return;
-  const name = document.getElementById('advcl-name').value.trim();
-  const date = document.getElementById('advcl-date').value;
-  const civil = document.getElementById('advcl-civil').value;
-  if (!name) { showMsg('advcl-msg', 'Enter the advocate name (or surname).', 'error'); return; }
-  if (!date) { showMsg('advcl-msg', 'Select a date.', 'error'); return; }
-  showMsg('advcl-msg', 'Scanning every court for "' + name + '" on ' + toDD(date) + '... (this takes 2-5 minutes)', 'loading');
-  document.getElementById('advcl-results').innerHTML = '';
+  const name = document.getElementById('daily-name').value.trim();
+  const date = document.getElementById('daily-date').value;
+  const civil = document.getElementById('daily-civil').value;
+  if (!name) { showMsg('daily-msg', 'Enter an advocate name.', 'error'); return; }
+  if (!date) { showMsg('daily-msg', 'Select a date.', 'error'); return; }
+  showMsg('daily-msg', 'Scanning every court for "' + name + '" on ' + toDD(date) + '… (2–5 minutes)', 'loading');
+  document.getElementById('daily-results').innerHTML = '';
   try {
     const url = '/api/scan-advocate?dist=' + encodeURIComponent(s.dist)
       + '&complex=' + encodeURIComponent(s.complex)
@@ -527,57 +306,138 @@ async function fetchAdvCauseList() {
       + '&civil=' + civil;
     const r = await fetch(url);
     const j = await r.json();
-    if (j.error) { showMsg('advcl-msg', j.error, 'error'); return; }
-    showMsg('advcl-msg', 'Found ' + j.count + ' hearings for "' + name + '" on ' + toDD(date) + '. (Scanned ' + (j.courts_scanned || []).length + ' court×type combos.)', 'success');
-    renderTable('advcl-results', j.data, [
-      {key:'case_number', label:'Case Number'},
-      {key:'petitioner', label:'Petitioner'},
-      {key:'respondent', label:'Respondent'},
-      {key:'court_name', label:'Court / Judge'},
-      {key:'list_type', label:'Type'},
-      {key:'advocate_role', label:'Role'},
-      {key:'advocate_petitioner', label:'Pet. Advocate'},
-      {key:'advocate_respondent', label:'Resp. Advocate'},
-    ]);
-  } catch (e) { showMsg('advcl-msg', 'Error: ' + e.message, 'error'); }
+    if (j.error) { showMsg('daily-msg', j.error, 'error'); return; }
+    lastResults.daily = j.data || [];
+    showMsg('daily-msg',
+      'Found ' + j.count + ' hearings for "' + name + '" on ' + toDD(date)
+      + '. Scanned ' + (j.courts_scanned || []).length + ' court × type combos.',
+      'success');
+    renderDailyResults();
+  } catch (e) { showMsg('daily-msg', 'Error: ' + e.message, 'error'); }
 }
 
-// ── Tab 7: Orders ──────────────────────────────────────────────────
-async function fetchOrders() {
-  const s = courtCheck('orders-msg');
-  if (!s) return;
-  const ct = document.getElementById('orders-type').value;
-  const cn = document.getElementById('orders-number').value.trim();
-  const cy = document.getElementById('orders-year').value;
-  if (!ct || !cn || !cy) { showMsg('orders-msg', 'Please fill all fields.', 'error'); return; }
-  showMsg('orders-msg', 'Fetching orders... (may take 15-30s, solving CAPTCHA)', 'loading');
-  document.getElementById('orders-results').innerHTML = '';
-  try {
-    const url = '/api/orders?dist=' + encodeURIComponent(s.dist)
-      + '&complex=' + encodeURIComponent(s.complex)
-      + '&case_type=' + encodeURIComponent(ct)
-      + '&case_number=' + encodeURIComponent(cn)
-      + '&year=' + encodeURIComponent(cy);
-    const r = await fetch(url);
-    const j = await r.json();
-    if (j.error) { showMsg('orders-msg', j.error, 'error'); return; }
-    showMsg('orders-msg', 'Found ' + j.count + ' orders.', 'success');
-    renderTable('orders-results', j.data, [
-      {key:'order_date', label:'Order Date'},
-      {key:'order_type', label:'Order Type'},
-      {key:'judge', label:'Judge'},
-      {key:'pdf_url', label:'PDF', render: (v) => v ? '<a href="' + esc(v) + '" target="_blank">Download</a>' : ''},
-    ]);
-  } catch (e) { showMsg('orders-msg', 'Error: ' + e.message, 'error'); }
+function renderDailyResults() {
+  const rows = lastResults.daily;
+  const el = document.getElementById('daily-results');
+  if (!rows.length) { el.innerHTML = '<p class="msg loading">No results.</p>'; return; }
+  let html = '<table><tr>'
+    + '<th>#</th><th>Case Number</th><th>Type</th><th>Year</th>'
+    + '<th>Petitioner</th><th>Respondent</th>'
+    + '<th>Petitioner Adv.</th><th>Respondent Adv.</th>'
+    + '<th>Role</th><th>Court / Judge</th><th>List</th>'
+    + '<th>CNR</th><th>Details</th></tr>';
+  rows.forEach((r, i) => {
+    const roleClass = r.advocate_role === 'petitioner' ? 'role-petitioner' : 'role-respondent';
+    html += '<tr>'
+      + '<td>' + (i+1) + '</td>'
+      + '<td>' + esc(r.case_number) + '</td>'
+      + '<td>' + esc(r.case_type) + '</td>'
+      + '<td>' + esc(r.year) + '</td>'
+      + '<td>' + esc(r.petitioner) + '</td>'
+      + '<td>' + esc(r.respondent) + '</td>'
+      + '<td>' + esc(r.advocate_petitioner) + '</td>'
+      + '<td>' + esc(r.advocate_respondent) + '</td>'
+      + '<td><span class="' + roleClass + '">' + esc(r.advocate_role) + '</span></td>'
+      + '<td>' + esc(r.court_name) + '</td>'
+      + '<td>' + esc(r.list_type) + '</td>'
+      + '<td>' + esc(r.cnr_number) + '</td>'
+      + '<td>' + (r._view_params && r._view_params.cino ? '<button class="btn-link" onclick="toggleDetails(\'daily\',' + i + ')">View ▼</button>' : '—') + '</td>'
+      + '</tr>'
+      + '<tr id="detail-daily-' + i + '" style="display:none"><td colspan="13" class="detail-row"><div id="detail-daily-' + i + '-body">Loading…</div></td></tr>';
+  });
+  html += '</table>';
+  el.innerHTML = html;
 }
 
-// ── Init ───────────────────────────────────────────────────────────
+// ───────── View Details (expandable) ─────────
+async function toggleDetails(scope, idx) {
+  const row = document.getElementById('detail-' + scope + '-' + idx);
+  const body = document.getElementById('detail-' + scope + '-' + idx + '-body');
+  if (!row) return;
+  if (row.style.display === 'none') {
+    row.style.display = '';
+    if (body.dataset.loaded !== '1') {
+      const data = (scope === 'all' ? lastResults.all : lastResults.daily)[idx];
+      if (!data || !data._view_params) { body.innerHTML = '<em>No detail link available.</em>'; return; }
+      const s = getSaved();
+      const v = data._view_params;
+      const url = '/api/case-detail?dist=' + encodeURIComponent(s.dist)
+        + '&complex=' + encodeURIComponent(s.complex)
+        + '&case_no_id=' + encodeURIComponent(v.case_no_id)
+        + '&cino=' + encodeURIComponent(v.cino)
+        + '&court_code=' + encodeURIComponent(v.court_code)
+        + '&search_by=' + encodeURIComponent(v.search_by || 'CScaseNumber');
+      try {
+        const r = await fetch(url);
+        const j = await r.json();
+        if (j.error) { body.innerHTML = '<em>Error: ' + esc(j.error) + '</em>'; return; }
+        body.innerHTML = renderDetail(j);
+        body.dataset.loaded = '1';
+      } catch (e) { body.innerHTML = '<em>Error: ' + esc(e.message) + '</em>'; }
+    }
+  } else {
+    row.style.display = 'none';
+  }
+}
+
+function renderDetail(d) {
+  let h = '<div class="detail-card">';
+  // Case Details
+  if (d.case_details && Object.keys(d.case_details).length) {
+    h += '<h4>Case Details</h4><div class="kv">';
+    Object.entries(d.case_details).forEach(([k,v]) => { h += '<div class="k">' + esc(k) + '</div><div>' + esc(v) + '</div>'; });
+    h += '</div>';
+  }
+  // Case Status
+  if (d.case_status && Object.keys(d.case_status).length) {
+    h += '<h4>Case Status</h4><div class="kv">';
+    Object.entries(d.case_status).forEach(([k,v]) => { h += '<div class="k">' + esc(k) + '</div><div>' + esc(v) + '</div>'; });
+    h += '</div>';
+  }
+  // Petitioners
+  if (d.petitioners && d.petitioners.length) {
+    h += '<h4>Petitioner(s) and Advocate</h4><ol style="padding-left:20px">';
+    d.petitioners.forEach(p => h += '<li style="margin-bottom:4px">' + esc(p) + '</li>');
+    h += '</ol>';
+  }
+  // Respondents
+  if (d.respondents && d.respondents.length) {
+    h += '<h4>Respondent(s) and Advocate</h4><ol style="padding-left:20px">';
+    d.respondents.forEach(p => h += '<li style="margin-bottom:4px">' + esc(p) + '</li>');
+    h += '</ol>';
+  }
+  // Acts
+  if (d.acts && d.acts.length) {
+    h += '<h4>Acts</h4><table class="history"><tr><th>Act</th><th>Section</th></tr>';
+    d.acts.forEach(a => h += '<tr><td>' + esc(a.act) + '</td><td>' + esc(a.section) + '</td></tr>');
+    h += '</table>';
+  }
+  // Case History
+  if (d.case_history && d.case_history.length) {
+    h += '<h4>Case History (' + d.case_history.length + ' entries)</h4>';
+    h += '<table class="history"><tr><th>Judge</th><th>Business Date</th><th>Hearing Date</th><th>Purpose</th></tr>';
+    d.case_history.forEach(row => {
+      h += '<tr><td>' + esc(row.judge) + '</td><td>' + esc(row.business_date)
+        + '</td><td>' + esc(row.hearing_date) + '</td><td>' + esc(row.purpose) + '</td></tr>';
+    });
+    h += '</table>';
+  }
+  // Interim Orders
+  if (d.interim_orders && d.interim_orders.length) {
+    h += '<h4>Interim Orders</h4><table class="history"><tr><th>#</th><th>Date</th><th>Details</th></tr>';
+    d.interim_orders.forEach(o => h += '<tr><td>' + esc(o.order_no) + '</td><td>' + esc(o.order_date) + '</td><td>' + esc(o.order_details) + '</td></tr>');
+    h += '</table>';
+  }
+  h += '</div>';
+  return h;
+}
+
+// ───────── Init ─────────
 document.addEventListener('DOMContentLoaded', () => {
   showSavedInfo();
   loadDistricts();
   const today = new Date().toISOString().split('T')[0];
-  document.getElementById('cause-date').value = today;
-  document.getElementById('advcl-date').value = today;
+  document.getElementById('daily-date').value = today;
 });
 </script>
 </body>

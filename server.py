@@ -1,3 +1,15 @@
+"""
+Maharashtra Courts backend — focused app for advocate queries.
+
+Three features:
+  1. Court hierarchy (district → complex), saved to localStorage
+  2. All Cases by Advocate (one-shot search across history)
+  3. Daily Cause List by Advocate (scan all courts on a date)
+
+Plus a case-detail endpoint that fetches the rich case-history HTML
+from the home/viewHistory endpoint, parses it into structured JSON.
+"""
+
 import asyncio
 import os
 import re
@@ -7,7 +19,12 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_file
 
 from bharat_courts import DistrictCourtClient
-from bharat_courts.districtcourts.parser import parse_complex_value, parse_case_status_html, parse_cause_list_html
+from bharat_courts.districtcourts.parser import (
+    parse_complex_value,
+    parse_case_status_html,
+    parse_cause_list_html,
+)
+from bs4 import BeautifulSoup
 
 load_dotenv()
 
@@ -17,7 +34,7 @@ STATE = "1"  # Maharashtra
 MAX_RETRIES = 3
 
 
-# ── helpers ──────────────────────────────────────────────────────────
+# ── infrastructure ─────────────────────────────────────────────────────
 
 def _run(coro):
     """Run async coro with retries — eCourts drops connections under load."""
@@ -50,22 +67,12 @@ def _require(*names):
     return vals, None
 
 
-async def _discover_court_nos(client, dist, complex_code, date_str, civil):
-    try:
-        await client.cause_list(
-            state_code=STATE, dist_code=dist,
-            court_complex_code=complex_code, est_code="",
-            court_no="__probe__", causelist_date=date_str, civil=civil,
-        )
-        return []
-    except Exception as ex:
-        m = re.search(r"Available:\s*(\[[^\]]+\])", str(ex))
-        if not m:
-            return []
-        return [c for c in re.findall(r"'([^']+)'", m.group(1)) if c != "D"]
+def _norm(s):
+    """Normalize for advocate-name matching: lowercase, strip spaces+periods."""
+    return re.sub(r"[\s.]+", "", (s or "").lower())
 
 
-# ── routes ───────────────────────────────────────────────────────────
+# ── routes ─────────────────────────────────────────────────────────────
 
 @app.get("/")
 def index():
@@ -76,6 +83,8 @@ def index():
 def health():
     return jsonify({"status": "ok"})
 
+
+# ─── Court hierarchy (no CAPTCHA) ──
 
 @app.get("/api/districts")
 def districts():
@@ -106,114 +115,11 @@ def complexes():
         return _err(str(e), 500)
 
 
-@app.get("/api/case-types")
-def case_types():
-    p, err = _require("dist", "complex")
-    if err:
-        return err
-    code, _, _ = parse_complex_value(p["complex"])
-    async def _go():
-        async with DistrictCourtClient() as c:
-            return await c.list_case_types(STATE, p["dist"], code, "")
-    try:
-        d = _run(_go)
-        items = [{"code": k, "name": v} for k, v in sorted(d.items(), key=lambda x: x[1])]
-        return _ok(items)
-    except Exception as e:
-        return _err(str(e), 500)
-
-
-@app.get("/api/cause-list")
-def cause_list():
-    p, err = _require("dist", "complex")
-    if err:
-        return err
-    date_str = request.args.get("date", "")
-    civil = request.args.get("civil", "true").lower() != "false"
-    code, _, _ = parse_complex_value(p["complex"])
-
-    async def _go():
-        async with DistrictCourtClient() as c:
-            court_nos = await _discover_court_nos(c, p["dist"], code, date_str, civil)
-            all_entries = []
-            for cno in court_nos:
-                try:
-                    entries = await c.cause_list(
-                        state_code=STATE, dist_code=p["dist"],
-                        court_complex_code=code, est_code="",
-                        court_no=cno, causelist_date=date_str, civil=civil,
-                    )
-                    for e in entries:
-                        all_entries.append({
-                            "item_number": e.item_number,
-                            "case_number": e.case_number,
-                            "case_type": e.case_type,
-                            "petitioner": e.petitioner,
-                            "respondent": e.respondent,
-                            "advocate_petitioner": e.advocate_petitioner,
-                            "advocate_respondent": e.advocate_respondent,
-                            "court_number": e.court_number,
-                            "judge": e.judge,
-                            "listing_date": e.listing_date,
-                        })
-                except Exception:
-                    continue
-            return all_entries, court_nos
-    try:
-        entries, court_nos = _run(_go)
-        return _ok(entries, court_nos_scanned=court_nos, date=date_str or "today")
-    except Exception as e:
-        return _err(str(e), 500)
-
-
-@app.get("/api/search-party")
-def search_party():
-    p, err = _require("dist", "complex", "party")
-    if err:
-        return err
-    year = request.args.get("year", "2025")
-    status = request.args.get("status", "Both")
-    code, _, _ = parse_complex_value(p["complex"])
-
-    async def _go():
-        async with DistrictCourtClient() as c:
-            cases = await c.case_status_by_party(
-                state_code=STATE, dist_code=p["dist"],
-                court_complex_code=code, est_code="",
-                party_name=p["party"], year=year, status_filter=status,
-            )
-            return [_case_to_dict(cs) for cs in cases]
-    try:
-        return _ok(_run(_go))
-    except Exception as e:
-        return _err(str(e), 500)
-
-
-@app.get("/api/case")
-def case_lookup():
-    p, err = _require("dist", "complex", "case_type", "case_number", "year")
-    if err:
-        return err
-    code, _, _ = parse_complex_value(p["complex"])
-
-    async def _go():
-        async with DistrictCourtClient() as c:
-            cases = await c.case_status(
-                state_code=STATE, dist_code=p["dist"],
-                court_complex_code=code, est_code="",
-                case_type=p["case_type"], case_number=p["case_number"],
-                year=p["year"],
-            )
-            return [_case_to_dict(cs) for cs in cases]
-    try:
-        return _ok(_run(_go))
-    except Exception as e:
-        return _err(str(e), 500)
-
+# ─── All Cases by Advocate (one-shot search across history) ──
 
 @app.get("/api/search-advocate")
 def search_advocate():
-    """Search cases by advocate name — calls eCourts submitAdvName directly."""
+    """Search every case the advocate has appeared in (uses eCourts submitAdvName)."""
     p, err = _require("dist", "complex", "advocate")
     if err:
         return err
@@ -235,73 +141,46 @@ def search_advocate():
                     "case_type": "",
                 }
             result = await c._post_with_captcha_retry(
-                "casestatus/submitAdvName",
-                build_form,
-                state_code=STATE,
-                dist_code=p["dist"],
-                court_complex_code=code,
-                est_code="",
+                "casestatus/submitAdvName", build_form,
+                state_code=STATE, dist_code=p["dist"],
+                court_complex_code=code, est_code="",
             )
             html = result.get("adv_data", "")
             cases = parse_case_status_html(html)
-            return [_case_to_dict(cs) for cs in cases]
+            # Also extract viewHistory params per case so the UI can call /api/case-detail
+            vh_calls = re.findall(r"viewHistory\(([^)]+)\)", html)
+            vh_map = {}
+            for call in vh_calls:
+                args = [a.strip().strip("'") for a in call.split(",")]
+                if len(args) >= 3:
+                    cino = args[1]
+                    vh_map[cino] = {
+                        "case_no_id": args[0],
+                        "cino": args[1],
+                        "court_code": args[2],
+                        "search_by": args[8] if len(args) > 8 else "CScaseNumber",
+                    }
+            out = []
+            for cs in cases:
+                d = _case_to_dict(cs)
+                if cs.cnr_number and cs.cnr_number in vh_map:
+                    d["_view_params"] = vh_map[cs.cnr_number]
+                out.append(d)
+            return out
     try:
         return _ok(_run(_go))
     except Exception as e:
         return _err(str(e), 500)
 
 
-@app.get("/api/advocate-causelist")
-def advocate_causelist():
-    """Get an advocate's cause list for a date, by bar registration number."""
-    p, err = _require("dist", "complex", "bar_state", "bar_code", "bar_year", "date")
-    if err:
-        return err
-    code, _, _ = parse_complex_value(p["complex"])
-
-    async def _go():
-        async with DistrictCourtClient() as c:
-            def build_form(captcha):
-                return {
-                    "radAdvt": "3",
-                    "adv_bar_state": p["bar_state"],
-                    "adv_bar_code": p["bar_code"],
-                    "adv_bar_year": p["bar_year"],
-                    "caselist_date": p["date"],
-                    "adv_captcha_code": captcha,
-                    "state_code": STATE,
-                    "dist_code": p["dist"],
-                    "court_complex_code": code,
-                    "est_code": "",
-                    "case_type": "",
-                }
-            result = await c._post_with_captcha_retry(
-                "casestatus/submitAdvName",
-                build_form,
-                state_code=STATE,
-                dist_code=p["dist"],
-                court_complex_code=code,
-                est_code="",
-            )
-            html = result.get("adv_data", "")
-            cases = parse_case_status_html(html)
-            return [_case_to_dict(cs) for cs in cases]
-    try:
-        return _ok(_run(_go))
-    except Exception as e:
-        return _err(str(e), 500)
-
-
-async def _list_cl_courts(client, dist, complex_code):
-    """Get the full court_no → court_name mapping from fillCauseList."""
-    return await client.list_cause_list_courts(STATE, dist, complex_code, "")
-
+# ─── Daily Cause List by Advocate ──
 
 async def _fetch_cause_list_raw(client, dist, complex_code, court_no, court_name, date_str, civil):
     """
     Fetch a cause list using the raw eCourts endpoint.
-    The bharat-courts SDK's cause_list() looks for 'causelist_data' in the response,
-    but the actual response field is 'case_data'. This bypasses that bug.
+    The bharat-courts SDK's cause_list() looks for 'causelist_data', but the
+    actual response field is 'case_data'. This bypasses that bug, and also
+    returns the raw HTML so we can extract viewHistory params per row.
     """
     def build_form(captcha):
         return {
@@ -321,7 +200,37 @@ async def _fetch_cause_list_raw(client, dist, complex_code, court_no, court_name
         state_code=STATE, dist_code=dist,
         court_complex_code=complex_code, est_code="",
     )
-    return parse_cause_list_html(result.get("case_data", ""))
+    html = result.get("case_data", "")
+    return parse_cause_list_html(html), html
+
+
+def _parse_view_history_calls(html):
+    """
+    Extract every viewHistory() call from cause list HTML and return a list
+    of dicts keyed by case_number text (for matching back to parsed entries).
+    """
+    out = []
+    calls = re.findall(r"viewHistory\(([^)]+)\)", html)
+    for call in calls:
+        args = [a.strip().strip("'") for a in call.split(",")]
+        if len(args) >= 3:
+            out.append({
+                "case_no_id": args[0],
+                "cino": args[1],
+                "court_code": args[2],
+                "search_by": args[8] if len(args) > 8 else "CauseList",
+            })
+    return out
+
+
+def _parse_case_no_from_text(text):
+    """Extract case type and number-year from a cause list case_number string.
+    e.g. 'ViewR.C.S./13/2024Next hearing date:- 15-06-2026' → ('R.C.S.', '13', '2024')."""
+    s = (text or "").replace("View", "").split("Next")[0].strip()
+    m = re.match(r"^([A-Za-z. ]+\.?)/(\d+)/(\d{4})$", s)
+    if m:
+        return m.group(1).strip(), m.group(2), m.group(3)
+    return s, "", ""
 
 
 @app.get("/api/scan-advocate")
@@ -333,25 +242,18 @@ def scan_advocate():
     date_str = request.args.get("date", "")
     civil_arg = request.args.get("civil", "both").lower()
     code, _, _ = parse_complex_value(p["complex"])
+    needle = _norm(p["advocate"])
 
-    # Normalize the needle: lowercase, strip all whitespace and periods so
-    # "Joshi J.A." matches "Joshi J. A." matches "joshi j a"
-    def norm(s):
-        return re.sub(r"[\s.]+", "", (s or "").lower())
-    needle = norm(p["advocate"])
-
-    # Decide which lists to scan
-    if civil_arg == "true" or civil_arg == "civil":
+    if civil_arg in ("true", "civil"):
         list_types = [True]
-    elif civil_arg == "false" or civil_arg == "criminal":
+    elif civil_arg in ("false", "criminal"):
         list_types = [False]
     else:
         list_types = [True, False]
 
     async def _go():
         async with DistrictCourtClient() as c:
-            courts = await _list_cl_courts(c, p["dist"], code)
-            # courts is {court_no: court_name} — filter out 'D' (district summary)
+            courts = await c.list_cause_list_courts(STATE, p["dist"], code, "")
             real = {cn: name for cn, name in courts.items() if cn != "D"}
             matches = []
             scanned = []
@@ -360,27 +262,38 @@ def scan_advocate():
                     tag = "civil" if civil else "criminal"
                     scanned.append(f"{court_no}/{tag}")
                     try:
-                        entries = await _fetch_cause_list_raw(
+                        entries, raw_html = await _fetch_cause_list_raw(
                             c, p["dist"], code, court_no, court_name, date_str, civil,
                         )
                     except Exception:
                         continue
-                    for e in entries:
-                        ap = (e.advocate_petitioner or "")
-                        ar = (e.advocate_respondent or "")
-                        if needle in norm(ap) or needle in norm(ar):
+                    vh_list = _parse_view_history_calls(raw_html)
+                    # Pair viewHistory data with parsed entries by index
+                    for idx, e in enumerate(entries):
+                        ap = e.advocate_petitioner or ""
+                        ar = e.advocate_respondent or ""
+                        if needle in _norm(ap) or needle in _norm(ar):
+                            case_type, num, year = _parse_case_no_from_text(e.case_number)
+                            vh = vh_list[idx] if idx < len(vh_list) else {}
                             matches.append({
                                 "case_number": (e.case_number or "").replace("View", "").split("Next")[0].strip(),
+                                "case_type": case_type,
+                                "case_number_only": num,
+                                "year": year,
                                 "petitioner": e.petitioner.split("versus")[0].strip() if e.petitioner else "",
-                                "respondent": (e.respondent.split("vs")[0].strip() if e.respondent
-                                               else (e.petitioner.split("versus")[1].split("vs")[0].strip()
-                                                     if e.petitioner and "versus" in e.petitioner else "")),
+                                "respondent": (
+                                    e.respondent.split("vs")[0].strip() if e.respondent
+                                    else (e.petitioner.split("versus")[1].split("vs")[0].strip()
+                                          if e.petitioner and "versus" in e.petitioner else "")
+                                ),
                                 "advocate_petitioner": ap,
                                 "advocate_respondent": ar,
-                                "advocate_role": "petitioner" if needle in norm(ap) else "respondent",
+                                "advocate_role": "petitioner" if needle in _norm(ap) else "respondent",
                                 "court_no": court_no,
                                 "court_name": court_name,
                                 "list_type": tag,
+                                "cnr_number": vh.get("cino", ""),
+                                "_view_params": vh,
                             })
             return matches, scanned
     try:
@@ -390,32 +303,164 @@ def scan_advocate():
         return _err(str(e), 500)
 
 
-@app.get("/api/orders")
-def orders():
-    p, err = _require("dist", "complex", "case_type", "case_number", "year")
+# ─── Case detail (for "View Details" buttons) ──
+
+def _text(el):
+    if el is None:
+        return ""
+    return re.sub(r"\s+", " ", el.get_text(" ", strip=True)).strip()
+
+
+def _parse_case_detail(html):
+    """Parse the home/viewHistory response HTML into structured JSON."""
+    soup = BeautifulSoup(html, "html.parser")
+    out = {
+        "case_details": {},
+        "case_status": {},
+        "petitioners": [],
+        "respondents": [],
+        "acts": [],
+        "case_history": [],
+        "interim_orders": [],
+        "process_details": [],
+        "transfer_details": [],
+    }
+
+    def grab_label_table(heading_text):
+        """Find a heading-table pair and turn it into a key→value dict."""
+        for h in soup.find_all(["h2", "h3"]):
+            if heading_text.lower() in _text(h).lower():
+                tbl = h.find_next("table")
+                if not tbl:
+                    return {}
+                kv = {}
+                for tr in tbl.find_all("tr"):
+                    cells = tr.find_all(["td", "th"])
+                    if len(cells) == 2:
+                        kv[_text(cells[0]).rstrip(":")] = _text(cells[1])
+                    elif len(cells) == 4:
+                        kv[_text(cells[0]).rstrip(":")] = _text(cells[1])
+                        kv[_text(cells[2]).rstrip(":")] = _text(cells[3])
+                return kv
+        return {}
+
+    out["case_details"] = grab_label_table("Case Details")
+    out["case_status"] = grab_label_table("Case Status")
+
+    # Petitioner and Advocate
+    for h in soup.find_all(["h2", "h3", "h4"]):
+        ht = _text(h).lower()
+        if "petitioner" in ht and "advocate" in ht:
+            target = h.find_next("table")
+            if target:
+                for tr in target.find_all("tr"):
+                    txt = _text(tr)
+                    if txt:
+                        out["petitioners"].append(txt)
+            break
+    for h in soup.find_all(["h2", "h3", "h4"]):
+        ht = _text(h).lower()
+        if "respondent" in ht and "advocate" in ht:
+            target = h.find_next("table")
+            if target:
+                for tr in target.find_all("tr"):
+                    txt = _text(tr)
+                    if txt:
+                        out["respondents"].append(txt)
+            break
+
+    # Acts
+    for h in soup.find_all(["h2", "h3"]):
+        if _text(h).strip().lower() == "acts":
+            tbl = h.find_next("table")
+            if tbl:
+                rows = tbl.find_all("tr")
+                for tr in rows[1:]:
+                    cells = tr.find_all(["td", "th"])
+                    if len(cells) >= 2:
+                        out["acts"].append({
+                            "act": _text(cells[0]),
+                            "section": _text(cells[1]),
+                        })
+            break
+
+    # Case History
+    for h in soup.find_all(["h2", "h3"]):
+        if "case history" in _text(h).lower():
+            tbl = h.find_next("table")
+            if tbl:
+                rows = tbl.find_all("tr")
+                for tr in rows[1:]:
+                    cells = tr.find_all(["td", "th"])
+                    if len(cells) >= 4:
+                        out["case_history"].append({
+                            "judge": _text(cells[0]),
+                            "business_date": _text(cells[1]),
+                            "hearing_date": _text(cells[2]),
+                            "purpose": _text(cells[3]),
+                        })
+            break
+
+    # Interim Orders
+    for h in soup.find_all(["h2", "h3"]):
+        if "interim orders" in _text(h).lower():
+            tbl = h.find_next("table")
+            if tbl:
+                rows = tbl.find_all("tr")
+                for tr in rows[1:]:
+                    cells = tr.find_all(["td", "th"])
+                    if len(cells) >= 3:
+                        out["interim_orders"].append({
+                            "order_no": _text(cells[0]),
+                            "order_date": _text(cells[1]),
+                            "order_details": _text(cells[2]),
+                        })
+            break
+
+    return out
+
+
+@app.get("/api/case-detail")
+def case_detail():
+    """Fetch full case detail via eCourts home/viewHistory.
+
+    Required: case_no_id, cino, court_code, dist, complex (+ optional search_by).
+    No CAPTCHA needed for viewHistory.
+    """
+    p, err = _require("case_no_id", "cino", "court_code", "dist", "complex")
     if err:
         return err
+    search_by = request.args.get("search_by", "CScaseNumber")
     code, _, _ = parse_complex_value(p["complex"])
 
     async def _go():
         async with DistrictCourtClient() as c:
-            ords = await c.court_orders(
+            await c._init_session()
+            await c._setup_court(
                 state_code=STATE, dist_code=p["dist"],
                 court_complex_code=code, est_code="",
-                case_type=p["case_type"], case_number=p["case_number"],
-                year=p["year"],
             )
-            return [{
-                "order_date": o.order_date,
-                "order_type": o.order_type,
-                "judge": o.judge,
-                "pdf_url": o.pdf_url,
-            } for o in ords]
+            form = {
+                "court_code": p["court_code"],
+                "state_code": STATE,
+                "dist_code": p["dist"],
+                "court_complex_code": code,
+                "case_no": p["case_no_id"],
+                "cino": p["cino"],
+                "hideparty": "",
+                "search_flag": search_by,
+                "search_by": search_by,
+            }
+            result = await c._post_ajax("home/viewHistory", form)
+            html = result.get("data_list", "")
+            return _parse_case_detail(html)
     try:
-        return _ok(_run(_go))
+        return jsonify(_run(_go))
     except Exception as e:
         return _err(str(e), 500)
 
+
+# ── shared helpers ─────────────────────────────────────────────────────
 
 def _case_to_dict(c):
     return {
