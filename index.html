@@ -52,8 +52,8 @@ a { color: #2a5db0; }
     <button onclick="switchTab('cause')">Cause List</button>
     <button onclick="switchTab('party')">Search by Party</button>
     <button onclick="switchTab('case')">Case Lookup</button>
-    <button onclick="switchTab('advsearch')">Search by Advocate</button>
-    <button onclick="switchTab('advcl')">Advocate Cause List</button>
+    <button onclick="switchTab('advsearch')">All Cases by Advocate</button>
+    <button onclick="switchTab('advcl')">Daily Cause List by Advocate</button>
     <button onclick="switchTab('orders')">Orders</button>
   </div>
 
@@ -153,33 +153,32 @@ a { color: #2a5db0; }
     <div id="advsearch-results"></div>
   </div>
 
-  <!-- Tab 6: Advocate Cause List -->
+  <!-- Tab 6: Daily Cause List by Advocate -->
   <div id="tab-advcl" class="panel">
     <div id="advcl-court"></div>
     <p style="color:#666;font-size:0.85rem;margin-bottom:10px">
-      Enter the advocate's bar registration number to get their cause list for a specific date.
+      Scans every court in the complex on the given date and returns cases where the advocate appears.
+      This takes 2-5 minutes (one CAPTCHA solve per court × 2 list types).
     </p>
     <div class="form-row">
       <div>
-        <label for="advcl-state">State Code</label>
-        <input type="text" id="advcl-state" value="MAH" maxlength="6" placeholder="MAH">
+        <label for="advcl-name">Advocate Name (or surname)</label>
+        <input type="text" id="advcl-name" value="Joshi J.A." placeholder="e.g. Joshi J.A.">
       </div>
-      <div>
-        <label for="advcl-code">Bar Number</label>
-        <input type="text" id="advcl-code" value="1137" maxlength="8" placeholder="1137">
-      </div>
-      <div>
-        <label for="advcl-year">Year</label>
-        <input type="text" id="advcl-year" value="1990" maxlength="4" placeholder="1990">
-      </div>
-    </div>
-    <div class="form-row">
       <div>
         <label for="advcl-date">Cause List Date</label>
         <input type="date" id="advcl-date">
       </div>
+      <div>
+        <label for="advcl-civil">List Type</label>
+        <select id="advcl-civil">
+          <option value="both" selected>Both</option>
+          <option value="true">Civil</option>
+          <option value="false">Criminal</option>
+        </select>
+      </div>
     </div>
-    <button class="action" onclick="fetchAdvCauseList()">Fetch Cause List</button>
+    <button class="action" onclick="fetchAdvCauseList()">Scan Cause Lists</button>
     <div id="advcl-msg"></div>
     <div id="advcl-results"></div>
   </div>
@@ -509,36 +508,36 @@ async function searchAdvocate() {
   } catch (e) { showMsg('advsearch-msg', 'Error: ' + e.message, 'error'); }
 }
 
-// ── Tab 6: Advocate Cause List ────────────────────────────────────
+// ── Tab 6: Daily Cause List by Advocate ──────────────────────────
 async function fetchAdvCauseList() {
   const s = courtCheck('advcl-msg');
   if (!s) return;
-  const barState = document.getElementById('advcl-state').value.trim();
-  const barCode = document.getElementById('advcl-code').value.trim();
-  const barYear = document.getElementById('advcl-year').value.trim();
+  const name = document.getElementById('advcl-name').value.trim();
   const date = document.getElementById('advcl-date').value;
-  if (!barState || !barCode || !barYear) { showMsg('advcl-msg', 'Enter full bar registration (state code, number, year).', 'error'); return; }
+  const civil = document.getElementById('advcl-civil').value;
+  if (!name) { showMsg('advcl-msg', 'Enter the advocate name (or surname).', 'error'); return; }
   if (!date) { showMsg('advcl-msg', 'Select a date.', 'error'); return; }
-  showMsg('advcl-msg', 'Fetching cause list for ' + barState + '/' + barCode + '/' + barYear + '... (may take 15-30s)', 'loading');
+  showMsg('advcl-msg', 'Scanning every court for "' + name + '" on ' + toDD(date) + '... (this takes 2-5 minutes)', 'loading');
   document.getElementById('advcl-results').innerHTML = '';
   try {
-    const url = '/api/advocate-causelist?dist=' + encodeURIComponent(s.dist)
+    const url = '/api/scan-advocate?dist=' + encodeURIComponent(s.dist)
       + '&complex=' + encodeURIComponent(s.complex)
-      + '&bar_state=' + encodeURIComponent(barState)
-      + '&bar_code=' + encodeURIComponent(barCode)
-      + '&bar_year=' + encodeURIComponent(barYear)
-      + '&date=' + encodeURIComponent(toDD(date));
+      + '&advocate=' + encodeURIComponent(name)
+      + '&date=' + encodeURIComponent(toDD(date))
+      + '&civil=' + civil;
     const r = await fetch(url);
     const j = await r.json();
     if (j.error) { showMsg('advcl-msg', j.error, 'error'); return; }
-    showMsg('advcl-msg', 'Found ' + j.count + ' hearings on ' + toDD(date) + '.', 'success');
+    showMsg('advcl-msg', 'Found ' + j.count + ' hearings for "' + name + '" on ' + toDD(date) + '. (Scanned ' + (j.courts_scanned || []).length + ' court×type combos.)', 'success');
     renderTable('advcl-results', j.data, [
       {key:'case_number', label:'Case Number'},
-      {key:'cnr_number', label:'CNR'},
       {key:'petitioner', label:'Petitioner'},
       {key:'respondent', label:'Respondent'},
-      {key:'status', label:'Status'},
-      {key:'next_hearing_date', label:'Next Hearing'},
+      {key:'court_name', label:'Court / Judge'},
+      {key:'list_type', label:'Type'},
+      {key:'advocate_role', label:'Role'},
+      {key:'advocate_petitioner', label:'Pet. Advocate'},
+      {key:'advocate_respondent', label:'Resp. Advocate'},
     ]);
   } catch (e) { showMsg('advcl-msg', 'Error: ' + e.message, 'error'); }
 }

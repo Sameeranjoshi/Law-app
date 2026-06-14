@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_file
 
 from bharat_courts import DistrictCourtClient
-from bharat_courts.districtcourts.parser import parse_complex_value, parse_case_status_html
+from bharat_courts.districtcourts.parser import parse_complex_value, parse_case_status_html, parse_cause_list_html
 
 load_dotenv()
 
@@ -292,50 +292,95 @@ def advocate_causelist():
         return _err(str(e), 500)
 
 
+async def _list_cl_courts(client, dist, complex_code):
+    """Get the full court_no → court_name mapping from fillCauseList."""
+    return await client.list_cause_list_courts(STATE, dist, complex_code, "")
+
+
+async def _fetch_cause_list_raw(client, dist, complex_code, court_no, court_name, date_str, civil):
+    """
+    Fetch a cause list using the raw eCourts endpoint.
+    The bharat-courts SDK's cause_list() looks for 'causelist_data' in the response,
+    but the actual response field is 'case_data'. This bypasses that bug.
+    """
+    def build_form(captcha):
+        return {
+            "CL_court_no": court_no,
+            "causelist_date": date_str,
+            "cause_list_captcha_code": captcha,
+            "court_name_txt": court_name,
+            "state_code": STATE,
+            "dist_code": dist,
+            "court_complex_code": complex_code,
+            "est_code": "",
+            "cicri": "civ" if civil else "cri",
+            "selprevdays": "0",
+        }
+    result = await client._post_with_captcha_retry(
+        "cause_list/submitCauseList", build_form,
+        state_code=STATE, dist_code=dist,
+        court_complex_code=complex_code, est_code="",
+    )
+    return parse_cause_list_html(result.get("case_data", ""))
+
+
 @app.get("/api/scan-advocate")
 def scan_advocate():
+    """Scan every court's cause list on a date and filter for an advocate name."""
     p, err = _require("dist", "complex", "advocate")
     if err:
         return err
     date_str = request.args.get("date", "")
-    civil = request.args.get("civil", "true").lower() != "false"
+    civil_arg = request.args.get("civil", "both").lower()
     code, _, _ = parse_complex_value(p["complex"])
     needle = p["advocate"].lower()
 
+    # Decide which lists to scan
+    if civil_arg == "true" or civil_arg == "civil":
+        list_types = [True]
+    elif civil_arg == "false" or civil_arg == "criminal":
+        list_types = [False]
+    else:
+        list_types = [True, False]
+
     async def _go():
         async with DistrictCourtClient() as c:
-            court_nos = await _discover_court_nos(c, p["dist"], code, date_str, civil)
+            courts = await _list_cl_courts(c, p["dist"], code)
+            # courts is {court_no: court_name} — filter out 'D' (district summary)
+            real = {cn: name for cn, name in courts.items() if cn != "D"}
             matches = []
-            for cno in court_nos:
-                try:
-                    entries = await c.cause_list(
-                        state_code=STATE, dist_code=p["dist"],
-                        court_complex_code=code, est_code="",
-                        court_no=cno, causelist_date=date_str, civil=civil,
-                    )
-                except Exception:
-                    continue
-                for e in entries:
-                    ap = (e.advocate_petitioner or "").lower()
-                    ar = (e.advocate_respondent or "").lower()
-                    if needle in ap or needle in ar:
-                        matches.append({
-                            "case_number": e.case_number,
-                            "case_type": e.case_type,
-                            "petitioner": e.petitioner,
-                            "respondent": e.respondent,
-                            "advocate_petitioner": e.advocate_petitioner,
-                            "advocate_respondent": e.advocate_respondent,
-                            "advocate_role": "petitioner" if needle in ap else "respondent",
-                            "court_number": e.court_number,
-                            "judge": e.judge,
-                            "listing_date": e.listing_date,
-                            "item_number": e.item_number,
-                        })
-            return matches, court_nos
+            scanned = []
+            for court_no, court_name in real.items():
+                for civil in list_types:
+                    tag = "civil" if civil else "criminal"
+                    scanned.append(f"{court_no}/{tag}")
+                    try:
+                        entries = await _fetch_cause_list_raw(
+                            c, p["dist"], code, court_no, court_name, date_str, civil,
+                        )
+                    except Exception:
+                        continue
+                    for e in entries:
+                        ap = (e.advocate_petitioner or "")
+                        ar = (e.advocate_respondent or "")
+                        if needle in ap.lower() or needle in ar.lower():
+                            matches.append({
+                                "case_number": (e.case_number or "").replace("View", "").split("Next")[0].strip(),
+                                "petitioner": e.petitioner.split("versus")[0].strip() if e.petitioner else "",
+                                "respondent": (e.respondent.split("vs")[0].strip() if e.respondent
+                                               else (e.petitioner.split("versus")[1].split("vs")[0].strip()
+                                                     if e.petitioner and "versus" in e.petitioner else "")),
+                                "advocate_petitioner": ap,
+                                "advocate_respondent": ar,
+                                "advocate_role": "petitioner" if needle in ap.lower() else "respondent",
+                                "court_no": court_no,
+                                "court_name": court_name,
+                                "list_type": tag,
+                            })
+            return matches, scanned
     try:
-        matches, court_nos = _run(_go)
-        return _ok(matches, court_nos_scanned=court_nos, date=date_str or "today")
+        matches, scanned = _run(_go)
+        return _ok(matches, courts_scanned=scanned, date=date_str or "today", advocate=p["advocate"])
     except Exception as e:
         return _err(str(e), 500)
 
