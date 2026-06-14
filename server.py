@@ -31,7 +31,7 @@ import db
 load_dotenv()
 
 app = Flask(__name__)
-PORT = int(os.getenv("FLASK_PORT", 5002))
+PORT = int(os.getenv("PORT") or os.getenv("FLASK_PORT", 5002))  # Render injects PORT
 STATE = "1"  # Maharashtra
 MAX_RETRIES = 3
 
