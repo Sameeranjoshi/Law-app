@@ -4,84 +4,515 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Maharashtra Courts — Advocate Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f5f5; color: #222; }
-.container { max-width: 1300px; margin: 0 auto; padding: 20px; }
-h1 { font-size: 1.6rem; margin-bottom: 2px; }
-.subtitle { color: #666; font-size: 0.9rem; margin-bottom: 18px; }
-.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 2px solid #ccc; margin-bottom: 16px; }
-.tabs button { padding: 10px 18px; border: none; background: #e8e8e8; cursor: pointer; font-size: 0.9rem; border-radius: 4px 4px 0 0; transition: background .15s; }
-.tabs button:hover { background: #d0d0d0; }
-.tabs button.active { background: #2a5db0; color: #fff; }
-.panel { display: none; }
-.panel.active { display: block; }
-label { display: block; font-weight: 600; margin: 10px 0 4px; font-size: 0.85rem; }
-select, input[type="text"], input[type="number"], input[type="date"] {
-  width: 100%; padding: 7px 10px; border: 1px solid #bbb; border-radius: 4px; font-size: 0.9rem; margin-bottom: 6px;
+:root {
+  --bg:           #f8fafc;
+  --bg-soft:      #f1f5f9;
+  --surface:      #ffffff;
+  --border:       #e2e8f0;
+  --border-soft:  #f1f5f9;
+  --text:         #0f172a;
+  --text-soft:    #475569;
+  --text-mute:    #94a3b8;
+
+  --primary:      #4f46e5;
+  --primary-700:  #4338ca;
+  --primary-50:   #eef2ff;
+  --primary-100:  #e0e7ff;
+
+  --success:      #10b981;
+  --success-50:   #ecfdf5;
+  --success-700:  #047857;
+  --warning:      #f59e0b;
+  --warning-50:   #fffbeb;
+  --warning-700:  #b45309;
+  --danger:       #ef4444;
+  --danger-50:    #fef2f2;
+  --danger-700:   #b91c1c;
+  --info:         #0ea5e9;
+  --info-50:      #f0f9ff;
+  --info-700:     #0369a1;
+
+  --radius:       10px;
+  --radius-sm:    6px;
+  --shadow-sm:    0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow:       0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-lg:    0 10px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.04);
+
+  --font:    'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
 }
-button.action { padding: 9px 22px; background: #2a5db0; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; margin-top: 8px; }
-button.action:hover { background: #1e4a8f; }
-.btn-link { background: none; border: none; color: #2a5db0; cursor: pointer; padding: 2px 8px; font-size: 0.82rem; text-decoration: underline; }
-.btn-link:hover { color: #1e4a8f; }
-.msg { padding: 10px 14px; border-radius: 4px; margin: 10px 0; font-size: 0.88rem; }
-.msg.error { background: #fdecea; color: #b71c1c; }
-.msg.success { background: #e8f5e9; color: #1b5e20; }
-.msg.loading { background: #eceff1; color: #555; }
-.msg.info { background: #e3f2fd; color: #0d47a1; }
-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.82rem; }
-th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
-th { background: #2a5db0; color: #fff; font-weight: 600; font-size: 0.78rem; }
-tr:nth-child(even) > td { background: #f0f4fa; }
-.detail-row td { background: #fffbea !important; padding: 12px 16px; border-top: 2px solid #f4c542; }
-.detail-card h4 { margin: 10px 0 6px; color: #2a5db0; font-size: 0.92rem; border-bottom: 1px solid #ddd; padding-bottom: 3px; }
-.detail-card .kv { display: grid; grid-template-columns: 180px 1fr; gap: 4px 12px; font-size: 0.85rem; }
-.detail-card .kv .k { font-weight: 600; color: #555; }
-.detail-card table.history { margin-top: 4px; font-size: 0.78rem; }
-.detail-card table.history th { background: #6a8fbf; }
-.form-row { display: flex; gap: 12px; flex-wrap: wrap; }
-.form-row > div { flex: 1; min-width: 180px; }
-.saved-info { background: #e3f2fd; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; margin-bottom: 10px; }
-.role-petitioner { background: #d4edda; padding: 2px 6px; border-radius: 3px; font-weight: 600; color: #155724; }
-.role-respondent { background: #d1ecf1; padding: 2px 6px; border-radius: 3px; font-weight: 600; color: #0c5460; }
-a { color: #2a5db0; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Top bar ── */
+.topbar {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #fff;
+  padding: 16px 32px;
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.topbar-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand-mark {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-700) 100%);
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  box-shadow: 0 4px 12px -2px rgba(79,70,229,0.5);
+}
+.brand-text h1 {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.brand-text p {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 1px;
+}
+.court-badge {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.court-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
+
+/* ── Layout ── */
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px 32px 80px;
+}
+
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-sm);
+}
+.tabs button {
+  flex: 1;
+  min-width: 140px;
+  padding: 11px 18px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-soft);
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.tabs button:hover { background: var(--bg-soft); color: var(--text); }
+.tabs button.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(79,70,229,0.3);
+}
+.tabs button .icon { font-size: 14px; }
+
+/* ── Panels ── */
+.panel {
+  display: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+  animation: fadeIn 0.2s ease;
+}
+.panel.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+.panel-header {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.panel-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.panel-header .lede {
+  margin-top: 6px;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+/* ── Forms ── */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-soft);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.field input,
+.field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+  transition: all 0.15s ease;
+}
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-100);
+}
+.field .hint { font-size: 11px; color: var(--text-mute); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn:hover { background: var(--primary-700); transform: translateY(-1px); box-shadow: 0 4px 10px -2px rgba(79,70,229,0.35); }
+.btn:disabled { background: var(--text-mute); cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--bg-soft); color: var(--text); border-color: var(--border); box-shadow: none; }
+.btn-ghost { background: transparent; color: var(--primary); padding: 4px 8px; font-size: 12px; }
+.btn-ghost:hover { background: var(--primary-50); transform: none; box-shadow: none; }
+
+.btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* ── Messages ── */
+.msg {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin: 16px 0;
+  border: 1px solid;
+}
+.msg.success { background: var(--success-50); color: var(--success-700); border-color: #a7f3d0; }
+.msg.error   { background: var(--danger-50);  color: var(--danger-700);  border-color: #fca5a5; }
+.msg.info    { background: var(--info-50);    color: var(--info-700);    border-color: #bae6fd; }
+.msg.loading {
+  background: var(--bg-soft); color: var(--text-soft); border-color: var(--border);
+}
+.msg .icon { flex-shrink: 0; font-size: 16px; line-height: 1.2; }
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Court info pill ── */
+.court-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--info-50);
+  border: 1px solid #bae6fd;
+  color: var(--info-700);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+/* ── Tables ── */
+.table-wrap {
+  margin-top: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+thead th {
+  background: var(--bg-soft);
+  color: var(--text-soft);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 10.5px;
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+tbody td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: top;
+  color: var(--text);
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover > td { background: rgba(79,70,229,0.025); }
+
+.role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.role-petitioner { background: #d1fae5; color: #065f46; }
+.role-respondent { background: #dbeafe; color: #1e40af; }
+
+.cache-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 6px;
+}
+.cache-badge.fresh   { background: var(--success-50); color: var(--success-700); }
+.cache-badge.cached  { background: var(--warning-50); color: var(--warning-700); }
+
+.case-link { color: var(--primary); font-weight: 500; font-family: var(--font-mono); }
+.case-link:hover { text-decoration: underline; }
+
+.cnr { font-family: var(--font-mono); font-size: 11px; color: var(--text-soft); }
+
+.empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-mute);
+}
+.empty .big {
+  font-size: 28px;
+  margin-bottom: 6px;
+}
+.empty p { font-size: 13px; }
+.empty .cta { margin-top: 16px; }
+
+/* ── Detail row ── */
+.detail-row > td {
+  background: linear-gradient(180deg, #fffbeb 0%, #fef9e0 100%);
+  padding: 18px 22px !important;
+  border-top: 1px solid #fef3c7;
+}
+.detail-card h4 {
+  font-size: 12px;
+  font-weight: 700;
+  margin: 14px 0 8px;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #fde68a;
+  padding-bottom: 4px;
+}
+.detail-card h4:first-child { margin-top: 0; }
+.detail-card .kv {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 4px 16px;
+  font-size: 12.5px;
+}
+.detail-card .kv .k { font-weight: 600; color: var(--text-soft); }
+.detail-card .kv .v { color: var(--text); }
+.detail-card ol { padding-left: 20px; margin-top: 4px; font-size: 12.5px; }
+.detail-card ol li { margin-bottom: 4px; }
+.detail-card table.history { margin-top: 4px; font-size: 11.5px; }
+.detail-card table.history thead th {
+  background: #fef3c7;
+  color: #78350f;
+  font-size: 10px;
+}
+.detail-card .refresh-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #0f172a;
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: all 0.2s ease;
+  max-width: 340px;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* ── Responsive ── */
+@media (max-width: 720px) {
+  .topbar { padding: 12px 16px; }
+  .topbar-inner { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .container { padding: 16px; }
+  .tabs { flex-wrap: wrap; }
+  .tabs button { flex: 1 1 calc(50% - 4px); font-size: 12px; padding: 9px 10px; min-width: 0; }
+  .panel { padding: 18px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .detail-card .kv { grid-template-columns: 1fr; }
+  table { font-size: 11.5px; }
+  thead th { font-size: 9.5px; padding: 8px; }
+  tbody td { padding: 8px; }
+}
 </style>
 </head>
 <body>
-<div class="container">
-  <h1>Maharashtra Courts — Advocate Tracker</h1>
-  <p class="subtitle">Look up an advocate's caseload via bharat-courts / eCourts</p>
 
-  <div class="tabs">
-    <button class="active" onclick="switchTab('court')">1 · Select Court</button>
-    <button onclick="switchTab('all')">2 · All Cases by Advocate</button>
-    <button onclick="switchTab('daily')">3 · Daily Cause List by Advocate</button>
-    <button onclick="switchTab('mycases')">4 · My Cases (cached)</button>
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">M</div>
+      <div class="brand-text">
+        <h1>Maharashtra Courts</h1>
+        <p>Advocate case tracker · district courts</p>
+      </div>
+    </div>
+    <div id="topbar-court"></div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="tabs" role="tablist">
+    <button class="active" onclick="switchTab('court')"><span class="icon">⚖️</span> Court</button>
+    <button onclick="switchTab('all')"><span class="icon">📋</span> All Cases</button>
+    <button onclick="switchTab('daily')"><span class="icon">📅</span> Daily Cause List</button>
+    <button onclick="switchTab('mycases')"><span class="icon">🗂️</span> My Cases</button>
   </div>
 
   <!-- Tab 1: Select Court -->
   <div id="tab-court" class="panel active">
+    <div class="panel-header">
+      <h2>1 · Select Court</h2>
+      <p class="lede">Pick the district and court complex you practice in. Saved locally; only needs to be done once.</p>
+    </div>
     <div id="court-saved"></div>
-    <label for="sel-dist">District</label>
-    <select id="sel-dist" onchange="loadComplexes()"><option value="">— loading districts —</option></select>
-    <label for="sel-complex">Court Complex</label>
-    <select id="sel-complex"><option value="">— select district first —</option></select>
-    <button class="action" onclick="saveDefault()">Save as Default</button>
+    <div class="form-grid">
+      <div class="field">
+        <label for="sel-dist">District</label>
+        <select id="sel-dist" onchange="loadComplexes()">
+          <option value="">— loading districts —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sel-complex">Court Complex</label>
+        <select id="sel-complex">
+          <option value="">— select district first —</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn" onclick="saveDefault()">
+      <span>Save as default</span>
+    </button>
     <div id="court-msg"></div>
   </div>
 
   <!-- Tab 2: All Cases by Advocate -->
   <div id="tab-all" class="panel">
+    <div class="panel-header">
+      <h2>2 · All Cases by Advocate</h2>
+      <p class="lede">One eCourts search returning every case where the advocate's name appears in the saved court complex.</p>
+    </div>
     <div id="all-court"></div>
-    <p style="color:#666;font-size:0.85rem;margin-bottom:10px">
-      One eCourts search returning every case where the advocate's name appears in the saved court complex.
-    </p>
-    <div class="form-row">
-      <div>
-        <label for="all-name">Advocate Name (min 3 characters)</label>
+    <div class="form-grid">
+      <div class="field">
+        <label for="all-name">Advocate Name</label>
         <input type="text" id="all-name" value="Joshi J.A." placeholder="e.g. Joshi J.A.">
+        <div class="hint">Minimum 3 characters</div>
       </div>
-      <div>
+      <div class="field">
         <label for="all-status">Status</label>
         <select id="all-status">
           <option value="Both">Both</option>
@@ -90,128 +521,169 @@ a { color: #2a5db0; }
         </select>
       </div>
     </div>
-    <button class="action" onclick="searchAdvocate()">Search</button>
+    <button class="btn" onclick="searchAdvocate()">
+      <span>Search eCourts</span>
+    </button>
     <div id="all-msg"></div>
     <div id="all-results"></div>
   </div>
 
   <!-- Tab 3: Daily Cause List by Advocate -->
   <div id="tab-daily" class="panel">
+    <div class="panel-header">
+      <h2>3 · Daily Cause List by Advocate</h2>
+      <p class="lede">Scans every court in the complex on the given date for an advocate's hearings. First fetch takes 2–5 minutes (CAPTCHA solve per court). Cached after that.</p>
+    </div>
     <div id="daily-court"></div>
-    <p style="color:#666;font-size:0.85rem;margin-bottom:10px">
-      Scans every court's cause list on the given date and returns cases where the advocate appears.
-      Takes 2–5 minutes (CAPTCHA solve per court × type).
-    </p>
-    <div class="form-row">
-      <div>
+    <div class="form-grid">
+      <div class="field">
         <label for="daily-name">Advocate Name</label>
         <input type="text" id="daily-name" value="Joshi J.A." placeholder="e.g. Joshi J.A.">
       </div>
-      <div>
+      <div class="field">
         <label for="daily-date">Date</label>
         <input type="date" id="daily-date">
       </div>
-      <div>
+      <div class="field">
         <label for="daily-civil">List Type</label>
         <select id="daily-civil">
-          <option value="both" selected>Both</option>
+          <option value="both" selected>Both (Civil + Criminal)</option>
           <option value="true">Civil</option>
           <option value="false">Criminal</option>
         </select>
       </div>
     </div>
-    <button class="action" onclick="scanCauseList()">Scan Cause Lists</button>
+    <button class="btn" onclick="scanCauseList()">
+      <span>Scan cause lists</span>
+    </button>
     <div id="daily-msg"></div>
     <div id="daily-results"></div>
   </div>
 
-  <!-- Tab 4: My Cases (cache browser) -->
+  <!-- Tab 4: My Cases -->
   <div id="tab-mycases" class="panel">
-    <p style="color:#666;font-size:0.85rem;margin-bottom:10px">
-      Every case the app has ever fetched lives here. No eCourts call — instant local lookup.
-      Click <em>View ▼</em> to see full case detail (cached) or hit <em>Refresh from eCourts</em> to update.
-    </p>
-    <div class="form-row">
-      <div>
-        <label for="my-filter">Filter by advocate (optional)</label>
-        <input type="text" id="my-filter" placeholder="e.g. Joshi (leave empty for all)">
+    <div class="panel-header">
+      <h2>4 · My Cases (Local Cache)</h2>
+      <p class="lede">Every case the app has ever fetched. No eCourts call — instant lookup from local DB. Detail view also cached.</p>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="my-filter">Filter by advocate</label>
+        <input type="text" id="my-filter" placeholder="Leave empty for all">
+        <div class="hint">Type a substring like "Joshi"</div>
       </div>
-      <div style="max-width:200px">
+      <div class="field">
         <label for="my-limit">Max rows</label>
         <input type="number" id="my-limit" value="500" min="10" max="5000">
       </div>
     </div>
-    <button class="action" onclick="loadMyCases()">Load / Refresh</button>
-    <button class="action" style="background:#777" onclick="showStats()">Cache Stats</button>
+    <div class="btn-row">
+      <button class="btn" onclick="loadMyCases()">Load / Refresh</button>
+      <button class="btn btn-secondary" onclick="showStats()">Cache stats</button>
+    </div>
     <div id="my-msg"></div>
     <div id="my-results"></div>
   </div>
 </div>
 
+<div id="toast" class="toast"></div>
+
 <script>
-// ───────── State ─────────
+// ────────── State ──────────
 let districtsLoaded = false;
 const lastResults = { all: [], daily: [], mycases: [] };
 
-function ageBadge(j) {
-  if (!j || j.cached === undefined) return '';
-  if (!j.cached) return ' <span style="background:#d4edda;color:#155724;padding:2px 6px;border-radius:3px;font-size:0.75rem">fresh</span>';
-  const s = j.age_seconds || 0;
-  const mins = Math.floor(s / 60);
-  const hrs = Math.floor(mins / 60);
-  let age = mins < 60 ? `${mins} min` : `${hrs} hr`;
-  return ` <span style="background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:0.75rem" title="From local cache. Add &refresh=1 to bypass">cached · ${age} ago</span>`;
-}
-
-// ───────── Utilities ─────────
+// ────────── Utilities ──────────
 function getSaved() {
   try { const v = localStorage.getItem('court'); return v ? JSON.parse(v) : null; } catch { return null; }
-}
-function showMsg(elId, text, type) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  el.className = 'msg ' + (type || '');
-  el.textContent = text;
-  el.style.display = text ? 'block' : 'none';
-}
-function showMsgHtml(elId, html, type) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  el.className = 'msg ' + (type || '');
-  el.innerHTML = html;
-  el.style.display = html ? 'block' : 'none';
-}
-function toDD(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-');
-  return d + '-' + m + '-' + y;
 }
 function esc(s) {
   const d = document.createElement('div');
   d.textContent = s == null ? '' : String(s);
   return d.innerHTML;
 }
+function toDD(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  return d + '-' + m + '-' + y;
+}
+function setBusy(btn, busy) {
+  if (!btn) return;
+  if (busy) {
+    btn.dataset.original = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> <span>Working…</span>';
+    btn.disabled = true;
+  } else {
+    btn.innerHTML = btn.dataset.original || btn.innerHTML;
+    btn.disabled = false;
+  }
+}
+function showMsg(elId, text, type) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!text) { el.style.display = 'none'; return; }
+  const icon = type === 'loading' ? '<span class="spinner"></span>' :
+               type === 'success' ? '<span class="icon">✓</span>' :
+               type === 'error'   ? '<span class="icon">⚠</span>' :
+               type === 'info'    ? '<span class="icon">ⓘ</span>' : '';
+  el.className = 'msg ' + (type || '');
+  el.innerHTML = icon + '<div>' + esc(text) + '</div>';
+  el.style.display = 'flex';
+}
+function showMsgHtml(elId, html, type) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const icon = type === 'loading' ? '<span class="spinner"></span>' :
+               type === 'success' ? '<span class="icon">✓</span>' :
+               type === 'error'   ? '<span class="icon">⚠</span>' :
+               type === 'info'    ? '<span class="icon">ⓘ</span>' : '';
+  el.className = 'msg ' + (type || '');
+  el.innerHTML = icon + '<div>' + html + '</div>';
+  el.style.display = 'flex';
+}
+function toast(text) {
+  const t = document.getElementById('toast');
+  t.textContent = text;
+  t.classList.add('show');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => t.classList.remove('show'), 2400);
+}
+function ageBadge(j) {
+  if (!j || j.cached === undefined) return '';
+  if (!j.cached) return ' <span class="cache-badge fresh">● fresh</span>';
+  const s = j.age_seconds || 0;
+  const mins = Math.floor(s / 60);
+  const hrs = Math.floor(mins / 60);
+  let age = s < 60 ? 'just now' : mins < 60 ? `${mins} min ago` : `${hrs} hr ago`;
+  return ' <span class="cache-badge cached">⏱ cached · ' + age + '</span>';
+}
+function emptyState(icon, title, hint, ctaText, ctaFn) {
+  const cta = ctaText ? `<div class="cta"><button class="btn btn-secondary" onclick="${ctaFn}">${ctaText}</button></div>` : '';
+  return `<div class="empty"><div class="big">${icon}</div><strong>${esc(title)}</strong><p>${esc(hint)}</p>${cta}</div>`;
+}
 function courtCheck(msgId) {
   const s = getSaved();
-  if (!s) { showMsg(msgId, 'Please select a court in tab 1 first.', 'error'); return null; }
+  if (!s) { showMsg(msgId, 'Please pick a court in tab 1 first.', 'error'); return null; }
   const infoEl = document.getElementById(msgId.replace('-msg', '-court'));
-  if (infoEl) infoEl.innerHTML = '<div class="saved-info">Court: ' + esc(s.dist_name) + ' → ' + esc(s.complex_name) + '</div>';
+  if (infoEl) {
+    infoEl.innerHTML = '<div class="court-info"><span>⚖️</span> ' + esc(s.dist_name) + ' → ' + esc(s.complex_name) + '</div>';
+  }
   return s;
 }
 
-// ───────── Tab switching ─────────
+// ────────── Tab switching ──────────
 function switchTab(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
   const tabNames = ['court', 'all', 'daily', 'mycases'];
-  if (id === 'mycases') loadMyCases();
   const idx = tabNames.indexOf(id);
   if (idx >= 0) document.querySelectorAll('.tabs button')[idx].classList.add('active');
   if (id === 'court' && !districtsLoaded) loadDistricts();
+  if (id === 'mycases') loadMyCases();
 }
 
-// ───────── Tab 1: Court Selection ─────────
+// ────────── Tab 1: Court Selection ──────────
 async function loadDistricts() {
   const sel = document.getElementById('sel-dist');
   sel.innerHTML = '<option value="">— loading —</option>';
@@ -258,7 +730,7 @@ function saveDefault() {
   const dist = document.getElementById('sel-dist');
   const comp = document.getElementById('sel-complex');
   if (!dist.value || !comp.value) {
-    showMsg('court-msg', 'Please select both district and complex.', 'error');
+    showMsg('court-msg', 'Please pick both district and complex.', 'error');
     return;
   }
   const data = {
@@ -268,19 +740,23 @@ function saveDefault() {
   };
   localStorage.setItem('court', JSON.stringify(data));
   showMsg('court-msg', 'Saved: ' + data.dist_name + ' → ' + data.complex_name, 'success');
+  toast('Court saved');
   showSavedInfo();
 }
 function showSavedInfo() {
   const saved = getSaved();
   const el = document.getElementById('court-saved');
+  const top = document.getElementById('topbar-court');
   if (saved) {
-    el.innerHTML = '<div class="saved-info">Saved: ' + esc(saved.dist_name) + ' → ' + esc(saved.complex_name) + '</div>';
+    el.innerHTML = '<div class="court-info"><span>⚖️</span> Saved: ' + esc(saved.dist_name) + ' → ' + esc(saved.complex_name) + '</div>';
+    top.innerHTML = '<div class="court-badge"><span class="dot"></span> ' + esc(saved.dist_name) + ' · ' + esc(saved.complex_name) + '</div>';
   } else {
     el.innerHTML = '';
+    top.innerHTML = '<div class="court-badge" style="background:rgba(239,68,68,0.18);border-color:rgba(239,68,68,0.4);"><span style="color:#fca5a5">●</span> No court selected</div>';
   }
 }
 
-// ───────── Tab 2: All Cases by Advocate ─────────
+// ────────── Tab 2: All Cases by Advocate ──────────
 async function searchAdvocate(forceRefresh) {
   const s = courtCheck('all-msg');
   if (!s) return;
@@ -288,8 +764,8 @@ async function searchAdvocate(forceRefresh) {
   if (!name || name.length < 3) { showMsg('all-msg', 'Enter at least 3 characters.', 'error'); return; }
   const status = document.getElementById('all-status').value;
   showMsg('all-msg', forceRefresh
-    ? 'Re-fetching from eCourts… (may take 15–30s, solving CAPTCHA)'
-    : 'Looking up advocate "' + name + '"… (instant from cache, or 15–30s if first time)', 'loading');
+    ? 'Re-fetching from eCourts… (15–30s, solving CAPTCHA)'
+    : 'Looking up "' + name + '"… (instant if cached, 15–30s if first time)', 'loading');
   document.getElementById('all-results').innerHTML = '';
   try {
     const url = '/api/search-advocate?dist=' + encodeURIComponent(s.dist)
@@ -301,38 +777,42 @@ async function searchAdvocate(forceRefresh) {
     const j = await r.json();
     if (j.error) { showMsg('all-msg', j.error, 'error'); return; }
     lastResults.all = j.data || [];
-    showMsgHtml('all-msg', 'Found ' + j.count + ' cases for "' + esc(name) + '".' + ageBadge(j)
-      + ' <button class="btn-link" onclick="searchAdvocate(true)">Force refresh from eCourts</button>', 'success');
+    showMsgHtml('all-msg',
+      'Found <strong>' + j.count + '</strong> cases for <strong>"' + esc(name) + '"</strong>' + ageBadge(j)
+      + ' &nbsp; <button class="btn-ghost" onclick="searchAdvocate(true)">Force refresh</button>',
+      'success');
     renderAllResults();
   } catch (e) { showMsg('all-msg', 'Error: ' + e.message, 'error'); }
 }
-
 function renderAllResults() {
   const rows = lastResults.all;
   const el = document.getElementById('all-results');
-  if (!rows.length) { el.innerHTML = '<p class="msg loading">No results.</p>'; return; }
-  let html = '<table><tr>'
-    + '<th>#</th><th>Case Number</th><th>CNR</th>'
+  if (!rows.length) {
+    el.innerHTML = emptyState('🔍', 'No cases found', 'Try a different spelling, status filter, or wider search.');
+    return;
+  }
+  let html = '<div class="table-wrap"><table><thead><tr>'
+    + '<th style="width:40px">#</th><th>Case Number</th><th>CNR</th>'
     + '<th>Petitioner</th><th>Respondent</th>'
-    + '<th>Status</th><th>Next Hearing</th><th>Details</th></tr>';
+    + '<th>Status</th><th>Next Hearing</th><th style="width:80px">Detail</th></tr></thead><tbody>';
   rows.forEach((r, i) => {
     html += '<tr>'
       + '<td>' + (i+1) + '</td>'
-      + '<td>' + esc(r.case_number) + '</td>'
-      + '<td>' + esc(r.cnr_number) + '</td>'
+      + '<td><span class="case-link">' + esc(r.case_number) + '</span></td>'
+      + '<td><span class="cnr">' + esc(r.cnr_number) + '</span></td>'
       + '<td>' + esc(r.petitioner) + '</td>'
       + '<td>' + esc(r.respondent) + '</td>'
       + '<td>' + esc(r.status) + '</td>'
-      + '<td>' + esc(r.next_hearing_date || '') + '</td>'
-      + '<td>' + (r._view_params ? '<button class="btn-link" onclick="toggleDetails(\'all\',' + i + ')">View ▼</button>' : '—') + '</td>'
+      + '<td>' + esc(r.next_hearing_date || '—') + '</td>'
+      + '<td>' + (r._view_params ? '<button class="btn-ghost" onclick="toggleDetails(\'all\',' + i + ')">View ▾</button>' : '—') + '</td>'
       + '</tr>'
-      + '<tr id="detail-all-' + i + '" style="display:none"><td colspan="8" class="detail-row"><div id="detail-all-' + i + '-body">Loading…</div></td></tr>';
+      + '<tr id="detail-all-' + i + '" style="display:none" class="detail-row"><td colspan="8"><div id="detail-all-' + i + '-body">Loading…</div></td></tr>';
   });
-  html += '</table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
 
-// ───────── Tab 3: Daily Cause List by Advocate ─────────
+// ────────── Tab 3: Daily Cause List by Advocate ──────────
 async function scanCauseList(forceRefresh) {
   const s = courtCheck('daily-msg');
   if (!s) return;
@@ -340,10 +820,10 @@ async function scanCauseList(forceRefresh) {
   const date = document.getElementById('daily-date').value;
   const civil = document.getElementById('daily-civil').value;
   if (!name) { showMsg('daily-msg', 'Enter an advocate name.', 'error'); return; }
-  if (!date) { showMsg('daily-msg', 'Select a date.', 'error'); return; }
+  if (!date) { showMsg('daily-msg', 'Pick a date.', 'error'); return; }
   showMsg('daily-msg', forceRefresh
     ? 'Re-scanning every court for "' + name + '" on ' + toDD(date) + '… (2–5 minutes)'
-    : 'Looking up cause list for "' + name + '" on ' + toDD(date) + '… (instant from cache, or 2–5 min if first time)',
+    : 'Looking up cause list for "' + name + '" on ' + toDD(date) + '… (instant if cached, 2–5 min if first time)',
     'loading');
   document.getElementById('daily-results').innerHTML = '';
   try {
@@ -358,15 +838,47 @@ async function scanCauseList(forceRefresh) {
     if (j.error) { showMsg('daily-msg', j.error, 'error'); return; }
     lastResults.daily = j.data || [];
     showMsgHtml('daily-msg',
-      'Found ' + j.count + ' hearings for "' + esc(name) + '" on ' + esc(toDD(date))
-      + '. Scanned ' + (j.courts_scanned || []).length + ' court × type combos.' + ageBadge(j)
-      + ' <button class="btn-link" onclick="scanCauseList(true)">Force refresh from eCourts</button>',
+      'Found <strong>' + j.count + '</strong> hearings for <strong>"' + esc(name) + '"</strong> on <strong>' + esc(toDD(date)) + '</strong>'
+      + ' · scanned ' + (j.courts_scanned || []).length + ' court × type combos.' + ageBadge(j)
+      + ' &nbsp; <button class="btn-ghost" onclick="scanCauseList(true)">Force refresh</button>',
       'success');
     renderDailyResults();
   } catch (e) { showMsg('daily-msg', 'Error: ' + e.message, 'error'); }
 }
+function renderDailyResults() {
+  const rows = lastResults.daily;
+  const el = document.getElementById('daily-results');
+  if (!rows.length) {
+    el.innerHTML = emptyState('📅', 'No hearings on this date', 'The advocate has no entries in the cause list for this date in this complex.');
+    return;
+  }
+  let html = '<div class="table-wrap"><table><thead><tr>'
+    + '<th style="width:40px">#</th><th>Case</th><th>Type</th><th>Year</th>'
+    + '<th>Petitioner</th><th>Respondent</th>'
+    + '<th>Role</th><th>Court / Judge</th><th>List</th>'
+    + '<th>CNR</th><th style="width:80px">Detail</th></tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    const roleClass = r.advocate_role === 'petitioner' ? 'role-petitioner' : 'role-respondent';
+    html += '<tr>'
+      + '<td>' + (i+1) + '</td>'
+      + '<td><span class="case-link">' + esc(r.case_number) + '</span></td>'
+      + '<td>' + esc(r.case_type) + '</td>'
+      + '<td>' + esc(r.year) + '</td>'
+      + '<td>' + esc(r.petitioner) + '</td>'
+      + '<td>' + esc(r.respondent) + '</td>'
+      + '<td><span class="role-badge ' + roleClass + '">' + esc(r.advocate_role) + '</span></td>'
+      + '<td>' + esc(r.court_name) + '</td>'
+      + '<td>' + esc(r.list_type) + '</td>'
+      + '<td><span class="cnr">' + esc(r.cnr_number) + '</span></td>'
+      + '<td>' + (r._view_params && r._view_params.cino ? '<button class="btn-ghost" onclick="toggleDetails(\'daily\',' + i + ')">View ▾</button>' : '—') + '</td>'
+      + '</tr>'
+      + '<tr id="detail-daily-' + i + '" style="display:none" class="detail-row"><td colspan="11"><div id="detail-daily-' + i + '-body">Loading…</div></td></tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
 
-// ───────── Tab 4: My Cases (cache browser) ─────────
+// ────────── Tab 4: My Cases ──────────
 async function loadMyCases() {
   const filter = document.getElementById('my-filter') ? document.getElementById('my-filter').value.trim() : '';
   const limit = document.getElementById('my-limit') ? document.getElementById('my-limit').value : '500';
@@ -379,44 +891,45 @@ async function loadMyCases() {
     const j = await r.json();
     if (j.error) { showMsg('my-msg', j.error, 'error'); return; }
     lastResults.mycases = j.data || [];
-    showMsg('my-msg', 'Showing ' + j.count + ' of ' + (j.total_in_db || 0) + ' cases in cache.', 'success');
+    showMsgHtml('my-msg',
+      'Showing <strong>' + j.count + '</strong> of <strong>' + (j.total_in_db || 0) + '</strong> cached cases.',
+      'success');
     renderMyCases();
   } catch (e) { showMsg('my-msg', 'Error: ' + e.message, 'error'); }
 }
-
 function renderMyCases() {
   const rows = lastResults.mycases;
   const el = document.getElementById('my-results');
   if (!rows.length) {
-    el.innerHTML = '<p class="msg loading">No cases in the local cache yet. Run a search in tabs 2 or 3 first.</p>';
+    el.innerHTML = emptyState('🗂️', 'No cases in the local cache yet',
+      'Run a search in tabs 2 or 3 first — every case fetched gets stored here for instant lookup.');
     return;
   }
-  let html = '<table><tr>'
-    + '<th>#</th><th>Case Number</th><th>Type</th><th>Year</th>'
+  let html = '<div class="table-wrap"><table><thead><tr>'
+    + '<th style="width:40px">#</th><th>Case</th><th>Type</th><th>Year</th>'
     + '<th>Petitioner</th><th>Respondent</th>'
     + '<th>Court</th><th>Status</th><th>Next Hearing</th>'
-    + '<th>Advocate</th><th>CNR</th><th>Details</th></tr>';
+    + '<th>Advocate</th><th>CNR</th><th style="width:80px">Detail</th></tr></thead><tbody>';
   rows.forEach((r, i) => {
     html += '<tr>'
       + '<td>' + (i+1) + '</td>'
-      + '<td>' + esc(r.case_number) + '</td>'
+      + '<td><span class="case-link">' + esc(r.case_number) + '</span></td>'
       + '<td>' + esc(r.case_type) + '</td>'
       + '<td>' + esc(r.year || '') + '</td>'
       + '<td>' + esc(r.petitioner) + '</td>'
       + '<td>' + esc(r.respondent) + '</td>'
       + '<td>' + esc(r.court_name) + '</td>'
       + '<td>' + esc(r.status) + '</td>'
-      + '<td>' + esc(r.next_hearing || '') + '</td>'
+      + '<td>' + esc(r.next_hearing || '—') + '</td>'
       + '<td>' + esc(r.advocate_seen) + '</td>'
-      + '<td>' + esc(r.cnr) + '</td>'
-      + '<td>' + (r.case_no_id && r.court_code ? '<button class="btn-link" onclick="toggleMyDetail(' + i + ')">View ▼</button>' : '—') + '</td>'
+      + '<td><span class="cnr">' + esc(r.cnr) + '</span></td>'
+      + '<td>' + (r.case_no_id && r.court_code ? '<button class="btn-ghost" onclick="toggleMyDetail(' + i + ')">View ▾</button>' : '—') + '</td>'
       + '</tr>'
-      + '<tr id="detail-mycases-' + i + '" style="display:none"><td colspan="12" class="detail-row"><div id="detail-mycases-' + i + '-body">Loading…</div></td></tr>';
+      + '<tr id="detail-mycases-' + i + '" style="display:none" class="detail-row"><td colspan="12"><div id="detail-mycases-' + i + '-body">Loading…</div></td></tr>';
   });
-  html += '</table>';
+  html += '</tbody></table></div>';
   el.innerHTML = html;
 }
-
 async function toggleMyDetail(idx) {
   const row = document.getElementById('detail-mycases-' + idx);
   const body = document.getElementById('detail-mycases-' + idx + '-body');
@@ -432,16 +945,12 @@ async function toggleMyDetail(idx) {
         + '&cino=' + encodeURIComponent(data.cnr)
         + '&court_code=' + encodeURIComponent(data.court_code)
         + '&search_by=CScaseNumber';
+      body.innerHTML = '<span class="spinner"></span> Loading detail…';
       try {
         const r = await fetch(url);
         const j = await r.json();
         if (j.error) { body.innerHTML = '<em>Error: ' + esc(j.error) + '</em>'; return; }
-        const tag = j._cached
-          ? ' <span style="background:#fff3cd;color:#856404;padding:2px 6px;border-radius:3px;font-size:0.75rem">cached</span>'
-          : ' <span style="background:#d4edda;color:#155724;padding:2px 6px;border-radius:3px;font-size:0.75rem">fresh</span>';
-        body.innerHTML = '<div style="text-align:right;margin-bottom:6px">' + tag
-          + ' <button class="btn-link" onclick="refreshMyDetail(' + idx + ')">Refresh from eCourts</button></div>'
-          + renderDetail(j);
+        body.innerHTML = renderDetail(j, idx, 'mycases');
         body.dataset.loaded = '1';
       } catch (e) { body.innerHTML = '<em>Error: ' + esc(e.message) + '</em>'; }
     }
@@ -449,12 +958,11 @@ async function toggleMyDetail(idx) {
     row.style.display = 'none';
   }
 }
-
 async function refreshMyDetail(idx) {
   const data = lastResults.mycases[idx];
   const body = document.getElementById('detail-mycases-' + idx + '-body');
   const s = getSaved();
-  body.innerHTML = 'Refreshing from eCourts…';
+  body.innerHTML = '<span class="spinner"></span> Refreshing from eCourts…';
   body.dataset.loaded = '';
   const url = '/api/case-detail?dist=' + encodeURIComponent(s.dist)
     + '&complex=' + encodeURIComponent(s.complex)
@@ -466,63 +974,27 @@ async function refreshMyDetail(idx) {
     const r = await fetch(url);
     const j = await r.json();
     if (j.error) { body.innerHTML = '<em>Error: ' + esc(j.error) + '</em>'; return; }
-    body.innerHTML = '<div style="text-align:right;margin-bottom:6px">'
-      + '<span style="background:#d4edda;color:#155724;padding:2px 6px;border-radius:3px;font-size:0.75rem">fresh</span>'
-      + ' <button class="btn-link" onclick="refreshMyDetail(' + idx + ')">Refresh from eCourts</button></div>'
-      + renderDetail(j);
+    body.innerHTML = renderDetail(j, idx, 'mycases');
     body.dataset.loaded = '1';
+    toast('Detail refreshed');
   } catch (e) { body.innerHTML = '<em>Error: ' + esc(e.message) + '</em>'; }
 }
-
 async function showStats() {
   try {
     const r = await fetch('/api/stats');
     const j = await r.json();
     showMsgHtml('my-msg',
-      '<strong>Local cache stats:</strong> '
-      + j.cases + ' cases · '
-      + j.case_details_cached + ' detail records · '
-      + j.cause_list_entries + ' cause list entries · '
-      + j.cached_queries + ' cached queries. '
-      + '<br><small>DB: ' + esc(j.db_path) + '</small>',
+      '<strong>Cache stats:</strong> '
+      + '<span style="margin:0 10px">📋 ' + j.cases + ' cases</span>'
+      + '<span style="margin:0 10px">📄 ' + j.case_details_cached + ' details</span>'
+      + '<span style="margin:0 10px">📅 ' + j.cause_list_entries + ' cause list rows</span>'
+      + '<span style="margin:0 10px">💾 ' + j.cached_queries + ' query results</span>'
+      + '<br><small style="color:var(--text-mute)">DB: ' + esc(j.db_path) + '</small>',
       'info');
   } catch (e) { showMsg('my-msg', 'Error: ' + e.message, 'error'); }
 }
 
-function renderDailyResults() {
-  const rows = lastResults.daily;
-  const el = document.getElementById('daily-results');
-  if (!rows.length) { el.innerHTML = '<p class="msg loading">No results.</p>'; return; }
-  let html = '<table><tr>'
-    + '<th>#</th><th>Case Number</th><th>Type</th><th>Year</th>'
-    + '<th>Petitioner</th><th>Respondent</th>'
-    + '<th>Petitioner Adv.</th><th>Respondent Adv.</th>'
-    + '<th>Role</th><th>Court / Judge</th><th>List</th>'
-    + '<th>CNR</th><th>Details</th></tr>';
-  rows.forEach((r, i) => {
-    const roleClass = r.advocate_role === 'petitioner' ? 'role-petitioner' : 'role-respondent';
-    html += '<tr>'
-      + '<td>' + (i+1) + '</td>'
-      + '<td>' + esc(r.case_number) + '</td>'
-      + '<td>' + esc(r.case_type) + '</td>'
-      + '<td>' + esc(r.year) + '</td>'
-      + '<td>' + esc(r.petitioner) + '</td>'
-      + '<td>' + esc(r.respondent) + '</td>'
-      + '<td>' + esc(r.advocate_petitioner) + '</td>'
-      + '<td>' + esc(r.advocate_respondent) + '</td>'
-      + '<td><span class="' + roleClass + '">' + esc(r.advocate_role) + '</span></td>'
-      + '<td>' + esc(r.court_name) + '</td>'
-      + '<td>' + esc(r.list_type) + '</td>'
-      + '<td>' + esc(r.cnr_number) + '</td>'
-      + '<td>' + (r._view_params && r._view_params.cino ? '<button class="btn-link" onclick="toggleDetails(\'daily\',' + i + ')">View ▼</button>' : '—') + '</td>'
-      + '</tr>'
-      + '<tr id="detail-daily-' + i + '" style="display:none"><td colspan="13" class="detail-row"><div id="detail-daily-' + i + '-body">Loading…</div></td></tr>';
-  });
-  html += '</table>';
-  el.innerHTML = html;
-}
-
-// ───────── View Details (expandable) ─────────
+// ────────── View Details (used by all + daily tabs) ──────────
 async function toggleDetails(scope, idx) {
   const row = document.getElementById('detail-' + scope + '-' + idx);
   const body = document.getElementById('detail-' + scope + '-' + idx + '-body');
@@ -540,11 +1012,12 @@ async function toggleDetails(scope, idx) {
         + '&cino=' + encodeURIComponent(v.cino)
         + '&court_code=' + encodeURIComponent(v.court_code)
         + '&search_by=' + encodeURIComponent(v.search_by || 'CScaseNumber');
+      body.innerHTML = '<span class="spinner"></span> Loading detail…';
       try {
         const r = await fetch(url);
         const j = await r.json();
         if (j.error) { body.innerHTML = '<em>Error: ' + esc(j.error) + '</em>'; return; }
-        body.innerHTML = renderDetail(j);
+        body.innerHTML = renderDetail(j, idx, scope);
         body.dataset.loaded = '1';
       } catch (e) { body.innerHTML = '<em>Error: ' + esc(e.message) + '</em>'; }
     }
@@ -553,59 +1026,86 @@ async function toggleDetails(scope, idx) {
   }
 }
 
-function renderDetail(d) {
+function renderDetail(d, idx, scope) {
+  const tag = d._cached
+    ? '<span class="cache-badge cached">⏱ cached</span>'
+    : '<span class="cache-badge fresh">● fresh</span>';
+  const refreshFn = scope === 'mycases' ? `refreshMyDetail(${idx})` : `refreshDetail('${scope}',${idx})`;
   let h = '<div class="detail-card">';
-  // Case Details
+  h += '<div class="refresh-bar">' + tag + ' <button class="btn-ghost" onclick="' + refreshFn + '">↻ Refresh from eCourts</button></div>';
+
   if (d.case_details && Object.keys(d.case_details).length) {
     h += '<h4>Case Details</h4><div class="kv">';
-    Object.entries(d.case_details).forEach(([k,v]) => { h += '<div class="k">' + esc(k) + '</div><div>' + esc(v) + '</div>'; });
+    Object.entries(d.case_details).forEach(([k,v]) => {
+      h += '<div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div>';
+    });
     h += '</div>';
   }
-  // Case Status
   if (d.case_status && Object.keys(d.case_status).length) {
     h += '<h4>Case Status</h4><div class="kv">';
-    Object.entries(d.case_status).forEach(([k,v]) => { h += '<div class="k">' + esc(k) + '</div><div>' + esc(v) + '</div>'; });
+    Object.entries(d.case_status).forEach(([k,v]) => {
+      h += '<div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div>';
+    });
     h += '</div>';
   }
-  // Petitioners
   if (d.petitioners && d.petitioners.length) {
-    h += '<h4>Petitioner(s) and Advocate</h4><ol style="padding-left:20px">';
-    d.petitioners.forEach(p => h += '<li style="margin-bottom:4px">' + esc(p) + '</li>');
+    h += '<h4>Petitioner(s) and Advocate</h4><ol>';
+    d.petitioners.forEach(p => h += '<li>' + esc(p) + '</li>');
     h += '</ol>';
   }
-  // Respondents
   if (d.respondents && d.respondents.length) {
-    h += '<h4>Respondent(s) and Advocate</h4><ol style="padding-left:20px">';
-    d.respondents.forEach(p => h += '<li style="margin-bottom:4px">' + esc(p) + '</li>');
+    h += '<h4>Respondent(s) and Advocate</h4><ol>';
+    d.respondents.forEach(p => h += '<li>' + esc(p) + '</li>');
     h += '</ol>';
   }
-  // Acts
   if (d.acts && d.acts.length) {
-    h += '<h4>Acts</h4><table class="history"><tr><th>Act</th><th>Section</th></tr>';
+    h += '<h4>Acts</h4><table class="history"><thead><tr><th>Act</th><th>Section</th></tr></thead><tbody>';
     d.acts.forEach(a => h += '<tr><td>' + esc(a.act) + '</td><td>' + esc(a.section) + '</td></tr>');
-    h += '</table>';
+    h += '</tbody></table>';
   }
-  // Case History
   if (d.case_history && d.case_history.length) {
     h += '<h4>Case History (' + d.case_history.length + ' entries)</h4>';
-    h += '<table class="history"><tr><th>Judge</th><th>Business Date</th><th>Hearing Date</th><th>Purpose</th></tr>';
+    h += '<table class="history"><thead><tr><th>Judge</th><th>Business Date</th><th>Hearing Date</th><th>Purpose</th></tr></thead><tbody>';
     d.case_history.forEach(row => {
       h += '<tr><td>' + esc(row.judge) + '</td><td>' + esc(row.business_date)
         + '</td><td>' + esc(row.hearing_date) + '</td><td>' + esc(row.purpose) + '</td></tr>';
     });
-    h += '</table>';
+    h += '</tbody></table>';
   }
-  // Interim Orders
   if (d.interim_orders && d.interim_orders.length) {
-    h += '<h4>Interim Orders</h4><table class="history"><tr><th>#</th><th>Date</th><th>Details</th></tr>';
+    h += '<h4>Interim Orders</h4><table class="history"><thead><tr><th>#</th><th>Date</th><th>Details</th></tr></thead><tbody>';
     d.interim_orders.forEach(o => h += '<tr><td>' + esc(o.order_no) + '</td><td>' + esc(o.order_date) + '</td><td>' + esc(o.order_details) + '</td></tr>');
-    h += '</table>';
+    h += '</tbody></table>';
   }
   h += '</div>';
   return h;
 }
 
-// ───────── Init ─────────
+async function refreshDetail(scope, idx) {
+  const data = (scope === 'all' ? lastResults.all : lastResults.daily)[idx];
+  const body = document.getElementById('detail-' + scope + '-' + idx + '-body');
+  const s = getSaved();
+  const v = data._view_params;
+  body.innerHTML = '<span class="spinner"></span> Refreshing from eCourts…';
+  body.dataset.loaded = '';
+  const url = '/api/case-detail?dist=' + encodeURIComponent(s.dist)
+    + '&complex=' + encodeURIComponent(s.complex)
+    + '&case_no_id=' + encodeURIComponent(v.case_no_id)
+    + '&cino=' + encodeURIComponent(v.cino)
+    + '&court_code=' + encodeURIComponent(v.court_code)
+    + '&search_by=' + encodeURIComponent(v.search_by || 'CScaseNumber')
+    + '&refresh=1';
+  try {
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { body.innerHTML = '<em>Error: ' + esc(j.error) + '</em>'; return; }
+    body.innerHTML = renderDetail(j, idx, scope);
+    body.dataset.loaded = '1';
+    toast('Detail refreshed');
+  } catch (e) { body.innerHTML = '<em>Error: ' + esc(e.message) + '</em>'; }
+}
+
+// ────────── Init ──────────
 document.addEventListener('DOMContentLoaded', () => {
   showSavedInfo();
   loadDistricts();
