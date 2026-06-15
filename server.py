@@ -27,10 +27,12 @@ from bharat_courts.districtcourts.parser import (
 from bs4 import BeautifulSoup
 
 import db
+from Ecourtindia import eci_bp
 
 load_dotenv()
 
 app = Flask(__name__)
+app.register_blueprint(eci_bp)  # eCourtsIndia Partner API routes under /api/eci/*
 PORT = int(os.getenv("PORT") or os.getenv("FLASK_PORT", 5002))  # Render injects PORT
 STATE = "1"  # Maharashtra
 MAX_RETRIES = 3
