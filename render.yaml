@@ -10,3 +10,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
+      # eCourtsIndia Partner API key. sync: false means it is NOT stored in
+      # git — set the value in the Render dashboard (Environment tab). When
+      # set, it overrides the obfuscated key embedded in Ecourtindia/secret.py.
+      - key: ECOURTS_API_KEY
+        sync: false
