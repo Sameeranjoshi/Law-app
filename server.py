@@ -599,6 +599,187 @@ def refresh_cache():
     return jsonify({"ok": True})
 
 
+# ─── Clients + reminders ──
+
+import csv
+import io
+import urllib.parse
+
+
+@app.get("/api/clients")
+def clients_list():
+    return _ok(db.list_clients())
+
+
+@app.post("/api/clients")
+def clients_add():
+    """Add one client. Body: form fields name, phone, notes."""
+    name = (request.form.get("name") or "").strip()
+    phone = (request.form.get("phone") or "").strip()
+    notes = (request.form.get("notes") or "").strip()
+    if not name:
+        return _err("name is required")
+    cid = db.add_client(name, phone, notes)
+    return jsonify({"id": cid, "ok": True})
+
+
+@app.post("/api/clients/<int:cid>/delete")
+def clients_delete(cid):
+    db.delete_client(cid)
+    return jsonify({"ok": True})
+
+
+@app.post("/api/clients/upload")
+def clients_upload():
+    """Upload a CSV of clients.
+
+    Expected columns: name, phone, notes (notes optional).
+    Headers are case-insensitive and order-independent.
+    Phones get normalized to country-code-prefixed digits.
+    """
+    if "file" not in request.files:
+        return _err("no file uploaded")
+    f = request.files["file"]
+    if not f.filename:
+        return _err("empty filename")
+    try:
+        text = f.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return _err("file must be UTF-8 encoded CSV")
+    reader = csv.DictReader(io.StringIO(text))
+    # Normalize headers
+    if reader.fieldnames is None:
+        return _err("could not parse CSV headers")
+    hdr_map = {h.lower().strip(): h for h in reader.fieldnames}
+    name_col = hdr_map.get("name") or hdr_map.get("client") or hdr_map.get("party")
+    phone_col = hdr_map.get("phone") or hdr_map.get("mobile") or hdr_map.get("whatsapp") or hdr_map.get("contact")
+    notes_col = hdr_map.get("notes") or hdr_map.get("note") or hdr_map.get("remarks")
+    if not name_col:
+        return _err("CSV must have a 'name' column (or 'client' / 'party')")
+    added = 0
+    skipped = 0
+    for row in reader:
+        name = (row.get(name_col) or "").strip()
+        if not name:
+            skipped += 1
+            continue
+        phone = (row.get(phone_col) or "").strip() if phone_col else ""
+        notes = (row.get(notes_col) or "").strip() if notes_col else ""
+        db.add_client(name, phone, notes)
+        added += 1
+    return jsonify({"ok": True, "added": added, "skipped": skipped})
+
+
+@app.get("/api/upcoming-hearings")
+def upcoming_hearings():
+    """Return upcoming hearings from `cases`, each annotated with
+    candidate matching clients from the local contacts."""
+    days = int(request.args.get("days", "30"))
+    hearings = db.upcoming_hearings(days_ahead=days)
+    out = []
+    for h in hearings:
+        # match against both petitioner and respondent
+        candidates = {}
+        for party_field in ("petitioner", "respondent"):
+            party = h.get(party_field) or ""
+            for cl in db.find_matching_clients(party):
+                k = cl["id"]
+                if k not in candidates or cl["_match_score"] > candidates[k]["_match_score"]:
+                    cl["_party"] = party_field
+                    cl["_party_text"] = party
+                    candidates[k] = cl
+        h["_matches"] = list(candidates.values())
+        out.append(h)
+    return _ok(out, days_ahead=days)
+
+
+def _build_reminder_message(client_name, case_number, parties, hearing_date,
+                            court_name, lawyer_name="Adv. J.A. Joshi",
+                            language="en"):
+    """Build a WhatsApp reminder message body."""
+    parties_str = parties or ""
+    court_str = court_name or ""
+    if language == "mr":  # Marathi
+        return (
+            f"नमस्कार {client_name},\n\n"
+            f"आपल्या प्रकरण {case_number} ची सुनावणी {hearing_date} रोजी आहे.\n"
+            f"न्यायालय: {court_str}\n"
+            f"प्रकरण: {parties_str}\n\n"
+            f"कृपया वेळेवर हजर रहावे.\n\n"
+            f"— {lawyer_name}"
+        )
+    return (
+        f"Dear {client_name},\n\n"
+        f"This is a reminder that your case {case_number} has its next hearing "
+        f"on {hearing_date}.\n"
+        f"Court: {court_str}\n"
+        f"Parties: {parties_str}\n\n"
+        f"Please be prepared to attend.\n\n"
+        f"— {lawyer_name}"
+    )
+
+
+@app.get("/api/whatsapp-link")
+def whatsapp_link():
+    """Build a wa.me link with a pre-filled reminder message."""
+    p, err = _require("client_id", "cnr")
+    if err:
+        return err
+    lang = request.args.get("lang", "en")
+    lawyer = request.args.get("lawyer", "Adv. J.A. Joshi")
+
+    # look up client + case
+    with db.conn() as c:
+        client = c.execute("SELECT * FROM clients WHERE id = ?", (p["client_id"],)).fetchone()
+        case = c.execute("SELECT * FROM cases WHERE cnr = ?", (p["cnr"],)).fetchone()
+    if not client:
+        return _err("client not found", 404)
+    if not case:
+        return _err("case not found", 404)
+    client = dict(client)
+    case = dict(case)
+
+    parties = f"{case.get('petitioner') or ''} vs {case.get('respondent') or ''}"
+    hearing = case.get("next_hearing") or ""
+    msg = _build_reminder_message(
+        client_name=client["name"],
+        case_number=case.get("case_number") or "",
+        parties=parties,
+        hearing_date=hearing,
+        court_name=case.get("court_name") or "",
+        lawyer_name=lawyer,
+        language=lang,
+    )
+    phone = client.get("phone") or ""
+    if not phone:
+        return _err("client has no phone number", 400)
+    link = f"https://wa.me/{phone}?text={urllib.parse.quote(msg)}"
+    return jsonify({
+        "ok": True,
+        "link": link,
+        "message": msg,
+        "phone": phone,
+        "client_name": client["name"],
+    })
+
+
+@app.post("/api/log-reminder")
+def log_reminder_endpoint():
+    """Record that a reminder was sent."""
+    p, err = _require("client_id", "cnr")
+    if err:
+        return err
+    hearing = request.form.get("hearing_date") or ""
+    message = request.form.get("message") or ""
+    db.log_reminder(int(p["client_id"]), p["cnr"], hearing, message)
+    return jsonify({"ok": True})
+
+
+@app.get("/api/reminders")
+def reminders_list():
+    return _ok(db.recent_reminders())
+
+
 # ── shared helpers ─────────────────────────────────────────────────────
 
 def _case_to_dict(c):

@@ -89,6 +89,27 @@ CREATE TABLE IF NOT EXISTS queries (
 );
 CREATE INDEX IF NOT EXISTS idx_queries_key ON queries(cache_key);
 CREATE INDEX IF NOT EXISTS idx_queries_type ON queries(query_type);
+
+CREATE TABLE IF NOT EXISTS clients (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL,
+  phone      TEXT,            -- normalized to digits-only with country code (e.g. 919876543210)
+  notes      TEXT,
+  added_at   INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_clients_name ON clients(name);
+
+CREATE TABLE IF NOT EXISTS reminders_sent (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id     INTEGER,
+  cnr           TEXT,
+  hearing_date  TEXT,
+  message       TEXT,
+  sent_at       INTEGER,
+  FOREIGN KEY (client_id) REFERENCES clients(id),
+  FOREIGN KEY (cnr) REFERENCES cases(cnr)
+);
+CREATE INDEX IF NOT EXISTS idx_reminders_cnr ON reminders_sent(cnr);
 """
 
 
@@ -301,3 +322,133 @@ def _to_int(v):
         return int(v) if v not in (None, "") else None
     except Exception:
         return None
+
+
+# ── clients & reminders ───────────────────────────────────────────────
+
+def _normalize_phone(raw: str, default_country: str = "91") -> str:
+    """Strip non-digits; if no country code, prepend default_country."""
+    digits = "".join(ch for ch in (raw or "") if ch.isdigit())
+    if not digits:
+        return ""
+    if len(digits) == 10:                  # bare Indian mobile
+        return default_country + digits
+    if digits.startswith("0") and len(digits) == 11:
+        return default_country + digits[1:]
+    return digits
+
+
+def add_client(name: str, phone: str, notes: str = "") -> int:
+    phone_norm = _normalize_phone(phone)
+    with conn() as c:
+        cur = c.execute(
+            "INSERT INTO clients (name, phone, notes, added_at) VALUES (?, ?, ?, ?)",
+            (name.strip(), phone_norm, notes or "", _now()),
+        )
+        return cur.lastrowid
+
+
+def list_clients() -> list[dict]:
+    with conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT * FROM clients ORDER BY name COLLATE NOCASE"
+        ).fetchall()]
+
+
+def delete_client(client_id: int):
+    with conn() as c:
+        c.execute("DELETE FROM clients WHERE id = ?", (client_id,))
+
+
+def find_matching_clients(party_text: str) -> list[dict]:
+    """
+    Returns clients whose name has at least 2 word-overlaps (or one rare word)
+    with the party text. Cheap fuzzy match — good enough for human review.
+    """
+    party_text = (party_text or "").lower()
+    if not party_text:
+        return []
+    party_tokens = set(t for t in re_split(party_text) if len(t) >= 3)
+    if not party_tokens:
+        return []
+    out = []
+    for client in list_clients():
+        name_tokens = set(t for t in re_split(client["name"].lower()) if len(t) >= 3)
+        overlap = party_tokens & name_tokens
+        if len(overlap) >= 2 or (len(overlap) == 1 and len(name_tokens) <= 2):
+            client["_match_score"] = len(overlap)
+            client["_matched_tokens"] = sorted(overlap)
+            out.append(client)
+    out.sort(key=lambda c: -c["_match_score"])
+    return out
+
+
+def upcoming_hearings(days_ahead: int = 30) -> list[dict]:
+    """
+    Cases with next_hearing within [today, today + days_ahead].
+    next_hearing is stored as either ISO 'YYYY-MM-DD' or 'DD Month YYYY'.
+    """
+    import datetime as dt
+    today = dt.date.today()
+    cutoff = today + dt.timedelta(days=days_ahead)
+    with conn() as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT * FROM cases WHERE next_hearing IS NOT NULL AND next_hearing != '' "
+            "ORDER BY next_hearing ASC"
+        ).fetchall()]
+    out = []
+    for r in rows:
+        d = _parse_loose_date(r.get("next_hearing"))
+        if d and today <= d <= cutoff:
+            r["_hearing_iso"] = d.isoformat()
+            r["_days_away"] = (d - today).days
+            out.append(r)
+    return out
+
+
+def log_reminder(client_id: int, cnr: str, hearing_date: str, message: str):
+    with conn() as c:
+        c.execute(
+            "INSERT INTO reminders_sent (client_id, cnr, hearing_date, message, sent_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (client_id, cnr, hearing_date, message, _now()),
+        )
+
+
+def recent_reminders(limit: int = 200) -> list[dict]:
+    with conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT r.*, cl.name as client_name, cl.phone as client_phone "
+            "FROM reminders_sent r LEFT JOIN clients cl ON cl.id = r.client_id "
+            "ORDER BY r.sent_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()]
+
+
+# ── small text helpers ────────────────────────────────────────────────
+
+import re as _re
+import datetime as _dt
+
+def re_split(text):
+    return _re.split(r"[^a-z0-9]+", text or "")
+
+
+def _parse_loose_date(s):
+    """Accept 'YYYY-MM-DD', 'DD-MM-YYYY', '15th June 2026', '15 June 2026' etc."""
+    if not s:
+        return None
+    s = s.strip()
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d %B %Y", "%d-%B-%Y", "%d/%m/%Y"):
+        try:
+            return _dt.datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    # "15th June 2026" → strip ordinal suffix
+    s2 = _re.sub(r"(\d+)(st|nd|rd|th)\b", r"\1", s, flags=_re.IGNORECASE)
+    for fmt in ("%d %B %Y", "%d %b %Y"):
+        try:
+            return _dt.datetime.strptime(s2, fmt).date()
+        except ValueError:
+            continue
+    return None

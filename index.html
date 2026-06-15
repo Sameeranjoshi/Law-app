@@ -470,6 +470,7 @@ tbody tr:hover > td { background: rgba(79,70,229,0.025); }
     <button onclick="switchTab('all')"><span class="icon">📋</span> All Cases</button>
     <button onclick="switchTab('daily')"><span class="icon">📅</span> Daily Cause List</button>
     <button onclick="switchTab('mycases')"><span class="icon">🗂️</span> My Cases</button>
+    <button onclick="switchTab('reminders')"><span class="icon">📱</span> Reminders</button>
   </div>
 
   <!-- Tab 1: Select Court -->
@@ -584,6 +585,73 @@ tbody tr:hover > td { background: rgba(79,70,229,0.025); }
     <div id="my-msg"></div>
     <div id="my-results"></div>
   </div>
+
+  <!-- Tab 5: Reminders -->
+  <div id="tab-reminders" class="panel">
+    <div class="panel-header">
+      <h2>5 · WhatsApp Reminders</h2>
+      <p class="lede">Upload your client contacts once, then send reminder messages to clients about their upcoming hearings — opens WhatsApp with a pre-filled message you tap Send on.</p>
+    </div>
+
+    <!-- Step 1: Contacts -->
+    <h3 style="font-size:14px;font-weight:600;margin:8px 0 12px;color:var(--text-soft)">Step 1 · Your Contacts</h3>
+
+    <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+      <p style="font-size:12.5px;color:var(--text-soft);margin-bottom:10px">
+        Upload a CSV with columns <code style="background:#fff;padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:11px">name, phone, notes</code>. Indian mobile numbers get auto-prefixed with +91.
+      </p>
+      <div class="btn-row">
+        <input type="file" id="contacts-file" accept=".csv" style="font-size:12px;padding:6px">
+        <button class="btn btn-secondary" onclick="uploadContacts()">Upload CSV</button>
+        <button class="btn btn-secondary" onclick="showAddClientForm()">+ Add one manually</button>
+        <button class="btn-ghost" onclick="downloadSampleCsv()">Sample CSV ↓</button>
+      </div>
+      <div id="add-client-form" style="display:none;margin-top:14px;padding:12px;background:#fff;border-radius:6px;border:1px solid var(--border)">
+        <div class="form-grid">
+          <div class="field">
+            <label>Name</label>
+            <input type="text" id="new-client-name" placeholder="Full name as in court records">
+          </div>
+          <div class="field">
+            <label>Phone</label>
+            <input type="text" id="new-client-phone" placeholder="9876543210">
+          </div>
+          <div class="field">
+            <label>Notes</label>
+            <input type="text" id="new-client-notes" placeholder="Optional">
+          </div>
+        </div>
+        <button class="btn" onclick="addOneClient()">Add</button>
+      </div>
+    </div>
+
+    <div id="contacts-msg"></div>
+    <div id="contacts-list" style="margin-bottom:24px"></div>
+
+    <!-- Step 2: Upcoming hearings -->
+    <h3 style="font-size:14px;font-weight:600;margin:24px 0 12px;color:var(--text-soft)">Step 2 · Upcoming Hearings</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label>Time Window</label>
+        <select id="rem-days">
+          <option value="1">Tomorrow only</option>
+          <option value="3">Next 3 days</option>
+          <option value="7" selected>Next 7 days</option>
+          <option value="30">Next 30 days</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Reminder Language</label>
+        <select id="rem-lang">
+          <option value="en" selected>English</option>
+          <option value="mr">Marathi</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn" onclick="loadUpcomingHearings()">Load upcoming hearings</button>
+    <div id="rem-msg"></div>
+    <div id="rem-results"></div>
+  </div>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -676,11 +744,12 @@ function switchTab(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
-  const tabNames = ['court', 'all', 'daily', 'mycases'];
+  const tabNames = ['court', 'all', 'daily', 'mycases', 'reminders'];
   const idx = tabNames.indexOf(id);
   if (idx >= 0) document.querySelectorAll('.tabs button')[idx].classList.add('active');
   if (id === 'court' && !districtsLoaded) loadDistricts();
   if (id === 'mycases') loadMyCases();
+  if (id === 'reminders') { loadContacts(); }
 }
 
 // ────────── Tab 1: Court Selection ──────────
@@ -1103,6 +1172,191 @@ async function refreshDetail(scope, idx) {
     body.dataset.loaded = '1';
     toast('Detail refreshed');
   } catch (e) { body.innerHTML = '<em>Error: ' + esc(e.message) + '</em>'; }
+}
+
+// ────────── Tab 5: Reminders ──────────
+async function uploadContacts() {
+  const file = document.getElementById('contacts-file').files[0];
+  if (!file) { showMsg('contacts-msg', 'Pick a CSV file first.', 'error'); return; }
+  const fd = new FormData();
+  fd.append('file', file);
+  showMsg('contacts-msg', 'Uploading…', 'loading');
+  try {
+    const r = await fetch('/api/clients/upload', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (j.error) { showMsg('contacts-msg', j.error, 'error'); return; }
+    showMsg('contacts-msg', 'Added ' + j.added + ' contacts (skipped ' + j.skipped + ').', 'success');
+    toast('Contacts added');
+    loadContacts();
+  } catch (e) { showMsg('contacts-msg', 'Error: ' + e.message, 'error'); }
+}
+
+function showAddClientForm() {
+  const f = document.getElementById('add-client-form');
+  f.style.display = f.style.display === 'none' ? 'block' : 'none';
+}
+
+async function addOneClient() {
+  const name = document.getElementById('new-client-name').value.trim();
+  const phone = document.getElementById('new-client-phone').value.trim();
+  const notes = document.getElementById('new-client-notes').value.trim();
+  if (!name) { showMsg('contacts-msg', 'Name is required.', 'error'); return; }
+  const fd = new FormData();
+  fd.append('name', name); fd.append('phone', phone); fd.append('notes', notes);
+  try {
+    const r = await fetch('/api/clients', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (j.error) { showMsg('contacts-msg', j.error, 'error'); return; }
+    document.getElementById('new-client-name').value = '';
+    document.getElementById('new-client-phone').value = '';
+    document.getElementById('new-client-notes').value = '';
+    toast('Client added');
+    loadContacts();
+  } catch (e) { showMsg('contacts-msg', 'Error: ' + e.message, 'error'); }
+}
+
+async function loadContacts() {
+  const el = document.getElementById('contacts-list');
+  try {
+    const r = await fetch('/api/clients');
+    const j = await r.json();
+    const rows = j.data || [];
+    if (!rows.length) {
+      el.innerHTML = '<div style="padding:14px;background:var(--bg-soft);border-radius:6px;color:var(--text-mute);font-size:12.5px">No contacts yet. Upload a CSV or add one manually above.</div>';
+      return;
+    }
+    let html = '<div class="table-wrap"><table><thead><tr>'
+      + '<th style="width:40px">#</th><th>Name</th><th>Phone</th><th>Notes</th><th style="width:80px"></th>'
+      + '</tr></thead><tbody>';
+    rows.forEach((c, i) => {
+      html += '<tr>'
+        + '<td>' + (i+1) + '</td>'
+        + '<td>' + esc(c.name) + '</td>'
+        + '<td><span class="cnr">' + esc(c.phone) + '</span></td>'
+        + '<td>' + esc(c.notes || '') + '</td>'
+        + '<td><button class="btn-ghost" onclick="deleteClient(' + c.id + ')">Delete</button></td>'
+        + '</tr>';
+    });
+    html += '</tbody></table></div>';
+    html += '<div style="margin-top:6px;font-size:11.5px;color:var(--text-mute)">' + rows.length + ' contact(s) loaded.</div>';
+    el.innerHTML = html;
+  } catch (e) { el.innerHTML = '<div class="msg error">Error: ' + esc(e.message) + '</div>'; }
+}
+
+async function deleteClient(id) {
+  if (!confirm('Delete this contact?')) return;
+  try {
+    const r = await fetch('/api/clients/' + id + '/delete', { method: 'POST' });
+    const j = await r.json();
+    if (j.error) { toast('Error: ' + j.error); return; }
+    toast('Deleted');
+    loadContacts();
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+function downloadSampleCsv() {
+  const csv = 'name,phone,notes\nShantabai Rangnath Pangavhane,9876543210,Wife of Pangavhane\nVimal Pandharinath Shiledar,9876543211,';
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'contacts-sample.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function loadUpcomingHearings() {
+  const days = document.getElementById('rem-days').value;
+  showMsg('rem-msg', 'Looking up upcoming hearings from local cache…', 'loading');
+  document.getElementById('rem-results').innerHTML = '';
+  try {
+    const r = await fetch('/api/upcoming-hearings?days=' + encodeURIComponent(days));
+    const j = await r.json();
+    if (j.error) { showMsg('rem-msg', j.error, 'error'); return; }
+    const rows = j.data || [];
+    if (!rows.length) {
+      showMsg('rem-msg', 'No upcoming hearings in cache for that window. Try running a search in tab 2 or 3 first.', 'info');
+      return;
+    }
+    let withMatch = 0, withoutMatch = 0;
+    rows.forEach(r => r._matches && r._matches.length ? withMatch++ : withoutMatch++);
+    showMsgHtml('rem-msg',
+      'Showing <strong>' + rows.length + '</strong> upcoming hearings · <strong>' + withMatch + '</strong> matched to clients, <strong>' + withoutMatch + '</strong> unmatched',
+      'success');
+    renderUpcomingHearings(rows);
+  } catch (e) { showMsg('rem-msg', 'Error: ' + e.message, 'error'); }
+}
+
+function renderUpcomingHearings(rows) {
+  const el = document.getElementById('rem-results');
+  let html = '<div class="table-wrap"><table><thead><tr>'
+    + '<th style="width:40px">#</th><th>Hearing</th><th>Case</th>'
+    + '<th>Petitioner</th><th>Respondent</th>'
+    + '<th>Matched Client</th><th style="width:200px">Action</th>'
+    + '</tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    const matches = r._matches || [];
+    let clientCell, actionCell;
+    if (matches.length === 0) {
+      clientCell = '<em style="color:var(--text-mute)">no match</em>';
+      actionCell = '—';
+    } else if (matches.length === 1) {
+      const m = matches[0];
+      clientCell = esc(m.name) + (m.phone ? '<br><span class="cnr">+' + esc(m.phone) + '</span>' : '<br><em style="color:var(--danger)">no phone</em>');
+      actionCell = m.phone
+        ? '<button class="btn" style="padding:6px 12px;font-size:12px;background:#25D366" onclick="openWhatsApp(' + m.id + ', \'' + esc(r.cnr) + '\', \'' + r._hearing_iso + '\')"><span>📱 WhatsApp</span></button>'
+        : '<em style="color:var(--text-mute);font-size:11.5px">add phone</em>';
+    } else {
+      // ambiguous - show dropdown
+      let opts = '<option value="">Pick one</option>';
+      matches.forEach(m => {
+        opts += '<option value="' + m.id + '">' + esc(m.name) + (m.phone ? '' : ' (no phone)') + '</option>';
+      });
+      clientCell = '<select id="match-' + i + '" onchange="this.dataset.cnr=\'' + esc(r.cnr) + '\'; this.dataset.h=\'' + r._hearing_iso + '\'">' + opts + '</select>';
+      actionCell = '<button class="btn" style="padding:6px 12px;font-size:12px;background:#25D366" onclick="openWhatsAppFromSelect(' + i + ')"><span>📱 WhatsApp</span></button>';
+    }
+    const daysAway = r._days_away;
+    const daysLabel = daysAway === 0 ? 'today' : daysAway === 1 ? 'tomorrow' : daysAway + ' days';
+    const dayBadge = daysAway <= 1
+      ? '<span style="background:#fee2e2;color:#991b1b;padding:1px 6px;border-radius:99px;font-size:10.5px;font-weight:600">' + daysLabel + '</span>'
+      : '<span style="color:var(--text-mute);font-size:11px">in ' + daysLabel + '</span>';
+    html += '<tr>'
+      + '<td>' + (i+1) + '</td>'
+      + '<td><div>' + esc(r._hearing_iso) + '</div>' + dayBadge + '</td>'
+      + '<td><span class="case-link">' + esc(r.case_number) + '</span><br><span class="cnr">' + esc(r.cnr) + '</span></td>'
+      + '<td>' + esc(r.petitioner) + '</td>'
+      + '<td>' + esc(r.respondent) + '</td>'
+      + '<td>' + clientCell + '</td>'
+      + '<td>' + actionCell + '</td>'
+      + '</tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+async function openWhatsApp(clientId, cnr, hearingIso) {
+  const lang = document.getElementById('rem-lang').value || 'en';
+  try {
+    const url = '/api/whatsapp-link?client_id=' + encodeURIComponent(clientId)
+      + '&cnr=' + encodeURIComponent(cnr) + '&lang=' + encodeURIComponent(lang);
+    const r = await fetch(url);
+    const j = await r.json();
+    if (j.error) { toast('Error: ' + j.error); return; }
+    // Open WhatsApp in new tab/window
+    window.open(j.link, '_blank');
+    // Log the reminder
+    const fd = new FormData();
+    fd.append('client_id', clientId); fd.append('cnr', cnr);
+    fd.append('hearing_date', hearingIso); fd.append('message', j.message);
+    fetch('/api/log-reminder', { method: 'POST', body: fd });
+    toast('WhatsApp opened for ' + j.client_name);
+  } catch (e) { toast('Error: ' + e.message); }
+}
+
+function openWhatsAppFromSelect(idx) {
+  const sel = document.getElementById('match-' + idx);
+  const clientId = sel.value;
+  if (!clientId) { toast('Pick a client first'); return; }
+  openWhatsApp(parseInt(clientId), sel.dataset.cnr, sel.dataset.h);
 }
 
 // ────────── Init ──────────
