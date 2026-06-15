@@ -471,6 +471,7 @@ tbody tr:hover > td { background: rgba(79,70,229,0.025); }
     <button onclick="switchTab('daily')"><span class="icon">📅</span> Daily Cause List</button>
     <button onclick="switchTab('mycases')"><span class="icon">🗂️</span> My Cases</button>
     <button onclick="switchTab('reminders')"><span class="icon">📱</span> Reminders</button>
+    <button onclick="switchTab('eci')"><span class="icon">⚡</span> eCourts API</button>
   </div>
 
   <!-- Tab 1: Select Court -->
@@ -652,6 +653,75 @@ tbody tr:hover > td { background: rgba(79,70,229,0.025); }
     <div id="rem-msg"></div>
     <div id="rem-results"></div>
   </div>
+
+  <!-- Tab 6: eCourtsIndia Partner API -->
+  <div id="tab-eci" class="panel">
+    <div class="panel-header">
+      <h2>6 · eCourtsIndia API</h2>
+      <p class="lede">National court data via the <a href="https://ecourtsindia.com/api/docs" target="_blank" rel="noopener">eCourtsIndia Partner API</a> — no CAPTCHA, instant JSON, all states. Powered by your API key.</p>
+    </div>
+    <div id="eci-status"></div>
+
+    <!-- A · Case by CNR -->
+    <h3 style="font-size:14px;font-weight:600;margin:8px 0 12px;color:var(--text-soft)">A · Look up a case by CNR</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label for="eci-cnr">CNR Number</label>
+        <input type="text" id="eci-cnr" placeholder="e.g. MHAU010012342024">
+        <div class="hint">16 characters — 4 letters + 12 digits</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" onclick="eciLookupCase()">Fetch case</button>
+      <button class="btn btn-secondary" onclick="eciRefreshCase()">↻ Queue fresh scrape</button>
+    </div>
+    <div id="eci-case-msg"></div>
+    <div id="eci-case-results"></div>
+
+    <!-- B · Search -->
+    <h3 style="font-size:14px;font-weight:600;margin:24px 0 12px;color:var(--text-soft)">B · Search cases</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label for="eci-q">Free text</label>
+        <input type="text" id="eci-q" placeholder="party, case no, keyword…">
+      </div>
+      <div class="field">
+        <label for="eci-adv">Advocate</label>
+        <input type="text" id="eci-adv" placeholder="e.g. Joshi">
+      </div>
+      <div class="field">
+        <label for="eci-litigant">Litigant / Party</label>
+        <input type="text" id="eci-litigant" placeholder="petitioner or respondent">
+      </div>
+    </div>
+    <button class="btn" onclick="eciSearch()">Search</button>
+    <div id="eci-search-msg"></div>
+    <div id="eci-search-results"></div>
+
+    <!-- C · Cause list -->
+    <h3 style="font-size:14px;font-weight:600;margin:24px 0 12px;color:var(--text-soft)">C · Cause list search</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label for="eci-cl-q">Case / party / advocate</label>
+        <input type="text" id="eci-cl-q" placeholder="e.g. Joshi">
+      </div>
+      <div class="field">
+        <label for="eci-cl-date">Date</label>
+        <input type="date" id="eci-cl-date">
+      </div>
+      <div class="field">
+        <label for="eci-cl-type">List type</label>
+        <select id="eci-cl-type">
+          <option value="">Both</option>
+          <option value="CIVIL">Civil</option>
+          <option value="CRIMINAL">Criminal</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn" onclick="eciCauseList()">Search cause list</button>
+    <div id="eci-cl-msg"></div>
+    <div id="eci-cl-results"></div>
+  </div>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -744,12 +814,13 @@ function switchTab(id) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
-  const tabNames = ['court', 'all', 'daily', 'mycases', 'reminders'];
+  const tabNames = ['court', 'all', 'daily', 'mycases', 'reminders', 'eci'];
   const idx = tabNames.indexOf(id);
   if (idx >= 0) document.querySelectorAll('.tabs button')[idx].classList.add('active');
   if (id === 'court' && !districtsLoaded) loadDistricts();
   if (id === 'mycases') loadMyCases();
   if (id === 'reminders') { loadContacts(); }
+  if (id === 'eci') loadEciStatus();
 }
 
 // ────────── Tab 1: Court Selection ──────────
@@ -1357,6 +1428,207 @@ function openWhatsAppFromSelect(idx) {
   const clientId = sel.value;
   if (!clientId) { toast('Pick a client first'); return; }
   openWhatsApp(parseInt(clientId), sel.dataset.cnr, sel.dataset.h);
+}
+
+// ────────── Tab 6: eCourtsIndia Partner API ──────────
+let eciStatusLoaded = false;
+function eciField(v) { return (v === null || v === undefined || v === '') ? '—' : v; }
+
+async function loadEciStatus() {
+  if (eciStatusLoaded) return;
+  const el = document.getElementById('eci-status');
+  try {
+    const r = await fetch('/api/eci/status');
+    const j = await r.json();
+    eciStatusLoaded = true;
+    if (j.configured) {
+      el.innerHTML = '<div class="court-info"><span>✅</span> API key configured · <span class="cnr">' + esc(j.base_url) + '</span></div>';
+    } else {
+      el.innerHTML = '<div class="msg error" style="display:flex"><span class="icon">⚠</span><div>'
+        + 'No <code>ECOURTS_API_KEY</code> set on the server. Add it to your <code>.env</code> (or Render env vars) and restart. '
+        + 'Get a key at <a href="https://ecourtsindia.com/api/docs" target="_blank" rel="noopener">ecourtsindia.com/api/docs</a>.'
+        + '</div></div>';
+    }
+  } catch (e) {
+    el.innerHTML = '<div class="msg error" style="display:flex"><span class="icon">⚠</span><div>Could not reach the server: ' + esc(e.message) + '</div></div>';
+  }
+}
+
+function eciShowError(msgId, j) {
+  const code = j.code ? ' [' + esc(j.code) + ']' : '';
+  showMsg(msgId, (j.error || 'Request failed') + code, 'error');
+}
+
+// A · Case by CNR
+async function eciLookupCase(forceRefresh) {
+  const cnr = document.getElementById('eci-cnr').value.trim().toUpperCase();
+  if (!cnr) { showMsg('eci-case-msg', 'Enter a CNR number.', 'error'); return; }
+  showMsg('eci-case-msg', 'Fetching case ' + cnr + '…', 'loading');
+  document.getElementById('eci-case-results').innerHTML = '';
+  try {
+    const r = await fetch('/api/eci/case/' + encodeURIComponent(cnr));
+    const j = await r.json();
+    if (j.error) { eciShowError('eci-case-msg', j); return; }
+    showMsg('eci-case-msg', 'Loaded case ' + cnr, 'success');
+    renderEciCase(j.data || j);
+  } catch (e) { showMsg('eci-case-msg', 'Error: ' + e.message, 'error'); }
+}
+
+async function eciRefreshCase() {
+  const cnr = document.getElementById('eci-cnr').value.trim().toUpperCase();
+  if (!cnr) { showMsg('eci-case-msg', 'Enter a CNR number.', 'error'); return; }
+  showMsg('eci-case-msg', 'Queuing a fresh scrape for ' + cnr + '…', 'loading');
+  try {
+    const r = await fetch('/api/eci/case/' + encodeURIComponent(cnr) + '/refresh', { method: 'POST' });
+    const j = await r.json();
+    if (j.error) { eciShowError('eci-case-msg', j); return; }
+    const d = j.data || j;
+    showMsg('eci-case-msg', 'Refresh ' + (d.status || 'QUEUED') + ' — wait ~10s then fetch the case again.', 'info');
+  } catch (e) { showMsg('eci-case-msg', 'Error: ' + e.message, 'error'); }
+}
+
+function renderEciCase(d) {
+  const el = document.getElementById('eci-case-results');
+  if (!d || typeof d !== 'object') { el.innerHTML = ''; return; }
+  let h = '<div class="detail-card">';
+  // Top-level scalar fields as a key/value grid.
+  h += '<h4>Case</h4><div class="kv">';
+  Object.entries(d).forEach(([k, v]) => {
+    if (k.startsWith('_') || v === null || v === undefined) return;
+    if (typeof v === 'object') return;
+    h += '<div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div>';
+  });
+  h += '</div>';
+  const arr = (k) => Array.isArray(d[k]) ? d[k] : [];
+  ['petitioners', 'respondents', 'advocates', 'judges'].forEach(key => {
+    const list = arr(key);
+    if (list.length) {
+      h += '<h4>' + key.charAt(0).toUpperCase() + key.slice(1) + '</h4><ol>';
+      list.forEach(x => h += '<li>' + esc(typeof x === 'object' ? JSON.stringify(x) : x) + '</li>');
+      h += '</ol>';
+    }
+  });
+  const hist = arr('hearingHistory').length ? arr('hearingHistory') : arr('caseHistory');
+  if (hist.length) {
+    h += '<h4>Hearing History (' + hist.length + ')</h4><table class="history"><thead><tr><th>Date</th><th>Purpose</th><th>Judge</th></tr></thead><tbody>';
+    hist.forEach(row => {
+      h += '<tr><td>' + esc(eciField(row.date || row.hearingDate || row.businessDate))
+        + '</td><td>' + esc(eciField(row.purpose || row.stage))
+        + '</td><td>' + esc(eciField(row.judge)) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+  }
+  const orders = arr('judgmentOrders').length ? arr('judgmentOrders') : arr('orders');
+  if (orders.length) {
+    h += '<h4>Orders (' + orders.length + ')</h4><table class="history"><thead><tr><th>Date</th><th>Details</th></tr></thead><tbody>';
+    orders.forEach(o => h += '<tr><td>' + esc(eciField(o.date || o.orderDate)) + '</td><td>' + esc(eciField(o.details || o.orderUrl || o.title)) + '</td></tr>');
+    h += '</tbody></table>';
+  }
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+// B · Search
+async function eciSearch() {
+  const params = new URLSearchParams();
+  const q = document.getElementById('eci-q').value.trim();
+  const adv = document.getElementById('eci-adv').value.trim();
+  const lit = document.getElementById('eci-litigant').value.trim();
+  if (q) params.set('query', q);
+  if (adv) params.set('advocates', adv);
+  if (lit) params.set('litigants', lit);
+  if (![...params.keys()].length) { showMsg('eci-search-msg', 'Enter a search term.', 'error'); return; }
+  params.set('pageSize', '50');
+  showMsg('eci-search-msg', 'Searching the national index…', 'loading');
+  document.getElementById('eci-search-results').innerHTML = '';
+  try {
+    const r = await fetch('/api/eci/search?' + params.toString());
+    const j = await r.json();
+    if (j.error) { eciShowError('eci-search-msg', j); return; }
+    const d = j.data || j;
+    const rows = d.results || d.hits || (Array.isArray(d) ? d : []);
+    showMsgHtml('eci-search-msg', 'Found <strong>' + (d.totalHits != null ? d.totalHits : rows.length) + '</strong> matches'
+      + (d.processingTimeMs != null ? ' in ' + d.processingTimeMs + 'ms' : ''), 'success');
+    renderEciSearch(rows);
+  } catch (e) { showMsg('eci-search-msg', 'Error: ' + e.message, 'error'); }
+}
+
+function renderEciSearch(rows) {
+  const el = document.getElementById('eci-search-results');
+  if (!rows.length) { el.innerHTML = emptyState('🔍', 'No results', 'Try broader terms or a different field.'); return; }
+  let h = '<div class="table-wrap"><table><thead><tr>'
+    + '<th style="width:40px">#</th><th>CNR</th><th>Case</th><th>Petitioner</th><th>Respondent</th><th>Court</th><th>Status</th><th style="width:80px">Detail</th></tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    const cnr = r.cnr || r.cnrNumber || '';
+    const pet = Array.isArray(r.petitioners) ? r.petitioners.join(', ') : (r.petitioner || '');
+    const res = Array.isArray(r.respondents) ? r.respondents.join(', ') : (r.respondent || '');
+    h += '<tr>'
+      + '<td>' + (i+1) + '</td>'
+      + '<td><span class="cnr">' + esc(cnr) + '</span></td>'
+      + '<td><span class="case-link">' + esc(eciField(r.caseNumber || r.caseNo)) + '</span></td>'
+      + '<td>' + esc(pet) + '</td>'
+      + '<td>' + esc(res) + '</td>'
+      + '<td>' + esc(eciField(r.courtName || r.court)) + '</td>'
+      + '<td>' + esc(eciField(r.caseStatus || r.status)) + '</td>'
+      + '<td>' + (cnr ? '<button class="btn-ghost" onclick="eciLoadIntoLookup(\'' + esc(cnr) + '\')">Open ▸</button>' : '—') + '</td>'
+      + '</tr>';
+  });
+  h += '</tbody></table></div>';
+  el.innerHTML = h;
+}
+
+function eciLoadIntoLookup(cnr) {
+  document.getElementById('eci-cnr').value = cnr;
+  document.getElementById('eci-cnr').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  eciLookupCase();
+}
+
+// C · Cause list
+async function eciCauseList() {
+  const params = new URLSearchParams();
+  const q = document.getElementById('eci-cl-q').value.trim();
+  const date = document.getElementById('eci-cl-date').value;
+  const type = document.getElementById('eci-cl-type').value;
+  if (q) params.set('q', q);
+  if (date) params.set('date', toDD(date));
+  if (type) params.set('listType', type);
+  if (![...params.keys()].length) { showMsg('eci-cl-msg', 'Enter a search term or date.', 'error'); return; }
+  params.set('limit', '50');
+  showMsg('eci-cl-msg', 'Searching cause lists…', 'loading');
+  document.getElementById('eci-cl-results').innerHTML = '';
+  try {
+    const r = await fetch('/api/eci/causelist/search?' + params.toString());
+    const j = await r.json();
+    if (j.error) { eciShowError('eci-cl-msg', j); return; }
+    const d = j.data || j;
+    const rows = d.results || d.entries || (Array.isArray(d) ? d : []);
+    showMsgHtml('eci-cl-msg', 'Found <strong>' + rows.length + '</strong> listings', 'success');
+    renderEciCauseList(rows);
+  } catch (e) { showMsg('eci-cl-msg', 'Error: ' + e.message, 'error'); }
+}
+
+function renderEciCauseList(rows) {
+  const el = document.getElementById('eci-cl-results');
+  if (!rows.length) { el.innerHTML = emptyState('📅', 'No listings', 'No cause-list entries for that query/date.'); return; }
+  let h = '<div class="table-wrap"><table><thead><tr>'
+    + '<th style="width:40px">#</th><th>Case</th><th>Parties</th><th>Judge</th><th>Court</th><th>District</th><th>List #</th><th>CNR</th></tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    const pet = Array.isArray(r.petitioners) ? r.petitioners.join(', ') : (r.petitioner || '');
+    const res = Array.isArray(r.respondents) ? r.respondents.join(', ') : (r.respondent || '');
+    const parties = (pet || res) ? (pet + ' vs ' + res) : eciField(r.parties);
+    h += '<tr>'
+      + '<td>' + (i+1) + '</td>'
+      + '<td><span class="case-link">' + esc(eciField(r.caseNumber || r.caseNo)) + '</span></td>'
+      + '<td>' + esc(parties) + '</td>'
+      + '<td>' + esc(eciField(r.judge)) + '</td>'
+      + '<td>' + esc(eciField(r.courtName || r.court || r.courtNo)) + '</td>'
+      + '<td>' + esc(eciField(r.district || r.districtName)) + '</td>'
+      + '<td>' + esc(eciField(r.listingNumber || r.srNo)) + '</td>'
+      + '<td><span class="cnr">' + esc(eciField(r.cnr || r.cnrNumber)) + '</span></td>'
+      + '</tr>';
+  });
+  h += '</tbody></table></div>';
+  el.innerHTML = h;
 }
 
 // ────────── Init ──────────

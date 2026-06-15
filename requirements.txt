@@ -2,4 +2,5 @@ flask>=3.0,<4.0
 python-dotenv>=1.0
 bharat-courts[ocr]==0.3.0
 beautifulsoup4>=4.12
+requests>=2.31
 gunicorn>=21.2
