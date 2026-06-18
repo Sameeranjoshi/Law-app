@@ -767,19 +767,98 @@ def whatsapp_link():
 
 @app.post("/api/log-reminder")
 def log_reminder_endpoint():
-    """Record that a reminder was sent."""
-    p, err = _require("client_id", "cnr")
-    if err:
-        return err
+    """Record that a reminder was sent. client_id comes from the POST form body."""
+    client_id = request.form.get("client_id")
+    if not client_id:
+        return _err("missing required parameter: client_id")
+    cnr = request.form.get("cnr") or ""
     hearing = request.form.get("hearing_date") or ""
     message = request.form.get("message") or ""
-    db.log_reminder(int(p["client_id"]), p["cnr"], hearing, message)
+    db.log_reminder(int(client_id), cnr, hearing, message)
     return jsonify({"ok": True})
 
 
 @app.get("/api/reminders")
 def reminders_list():
     return _ok(db.recent_reminders())
+
+
+@app.post("/api/causelist-reminders")
+def causelist_reminders():
+    """Turn eCourtsIndia cause-list matters into ready-to-send reminders.
+
+    Body (JSON): {
+      "matters": [ <cause-list entries from /api/eci/causelist/search> ],
+      "lang": "en"|"mr", "lawyer": "Adv. ..."
+    }
+    For each matter we match its parties against the local contacts and build a
+    WhatsApp reminder for the listing date — so the whole day's board can go out
+    in one pass. No eCourts call; pure local matching. Nothing is persisted.
+    """
+    body = request.get_json(silent=True) or {}
+    matters = body.get("matters") or []
+    if not isinstance(matters, list):
+        return _err("matters must be a list")
+    lang = body.get("lang", "en")
+    lawyer = body.get("lawyer") or "Adv. J.A. Joshi"
+
+    out = []
+    seen = set()  # (client_id, case_number, date) → one reminder per matter
+    for m in matters:
+        if not isinstance(m, dict):
+            continue
+        date = m.get("date") or ""
+        court = m.get("courtName") or m.get("court") or ""
+        case_no = m.get("caseNumber")
+        if isinstance(case_no, list):
+            case_no = ", ".join(str(x) for x in case_no)
+        case_no = case_no or ""
+
+        pet = m.get("petitioners") if isinstance(m.get("petitioners"), list) else []
+        res = m.get("respondents") if isinstance(m.get("respondents"), list) else []
+        party_strings = list(pet) + list(res)
+        if m.get("party"):
+            # also split a combined "A Vs B" string into its sides
+            party_strings += re.split(r"\bv/?s\.?\b", m["party"], flags=re.IGNORECASE)
+        parties_text = m.get("party") or " vs ".join(filter(None, [", ".join(pet), ", ".join(res)]))
+
+        # collect best-scoring client match per matter
+        candidates = {}
+        for ps in party_strings:
+            for cl in db.find_matching_clients(ps):
+                cur = candidates.get(cl["id"])
+                if cur is None or cl["_match_score"] > cur["_match_score"]:
+                    cl["_party_text"] = (ps or "").strip()
+                    candidates[cl["id"]] = cl
+
+        for cl in candidates.values():
+            key = (cl["id"], case_no, date)
+            if key in seen:
+                continue
+            seen.add(key)
+            msg = _build_reminder_message(
+                client_name=cl["name"], case_number=case_no, parties=parties_text,
+                hearing_date=date, court_name=court, lawyer_name=lawyer, language=lang,
+            )
+            phone = cl.get("phone") or ""
+            out.append({
+                "client_id": cl["id"],
+                "client_name": cl["name"],
+                "phone": phone,
+                "has_phone": bool(phone),
+                "matched_on": cl.get("_party_text", ""),
+                "match_score": cl.get("_match_score", 0),
+                "parties": parties_text,
+                "case_number": case_no,
+                "date": date,
+                "court": court,
+                "list_type": m.get("listType") or "",
+                "message": msg,
+                "link": f"https://wa.me/{phone}?text={urllib.parse.quote(msg)}" if phone else None,
+            })
+
+    out.sort(key=lambda r: (not r["has_phone"], -r["match_score"]))
+    return _ok(out, matters_in=len(matters), contacts=len(db.list_clients()))
 
 
 # ── shared helpers ─────────────────────────────────────────────────────
